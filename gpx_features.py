@@ -90,11 +90,21 @@ class Chunk:
         grade_std = float(np.std(grads))
 
         # ── Tobler time (minutes) per segment ───────────────────────────────
+        # Split into ascent / descent so Stage 1 can calibrate them independently.
+        # Tobler significantly overestimates speed on steep descent (>25% grade),
+        # so a single multiplier α cannot fit both uphill and downhill routes well.
         tobler_min = 0.0
+        tobler_ascent_min = 0.0
+        tobler_descent_min = 0.0
         for d_h, grad in zip(horiz_distances, gradients):
             speed_kmh = 6.0 * math.exp(-3.5 * abs(grad + 0.05))
             speed_kmh = max(speed_kmh, 0.1)  # floor: 100 m/h
-            tobler_min += (d_h / 1000.0) / speed_kmh * 60.0
+            seg_time = (d_h / 1000.0) / speed_kmh * 60.0
+            tobler_min += seg_time
+            if grad >= 0:
+                tobler_ascent_min += seg_time
+            else:
+                tobler_descent_min += seg_time
 
         self._features = {
             "dist_m": total_dist_m,
@@ -104,6 +114,8 @@ class Chunk:
             "max_grade": max_grade,
             "grade_std": grade_std,
             "tobler_min": tobler_min,
+            "tobler_ascent_min": tobler_ascent_min,
+            "tobler_descent_min": tobler_descent_min,
             # Weighted difficulty: uphill costs more than downhill
             "difficulty": gain_m * 1.0 + loss_m * 0.5 + total_dist_m * 0.001,
         }
@@ -119,6 +131,8 @@ def _empty_chunk_features() -> dict:
         max_grade=0,
         grade_std=0,
         tobler_min=0,
+        tobler_ascent_min=0,
+        tobler_descent_min=0,
         difficulty=0,
     )
 
@@ -166,15 +180,42 @@ def parse_gpx(path: str | Path) -> Tuple[List[List[TrackPoint]], Optional[float]
     if not segments:
         return [], None
 
-    # Duration: first point of first segment → last point of last segment
-    all_pts = [p for s in segments for p in s]
-    t_start = all_pts[0].time_s
-    t_end = all_pts[-1].time_s
-    duration_min: Optional[float] = None
-    if t_start > 0 and t_end > t_start:
-        duration_min = (t_end - t_start) / 60.0
+    return segments, _moving_duration(segments)
 
-    return segments, duration_min
+
+# Implied speed below this threshold is treated as a pause (rest, lunch, photos).
+# 0.5 km/h ≈ 8 m/min; even on very steep terrain hikers move faster than this.
+_MIN_MOVING_SPEED_KMH: float = 0.5
+
+
+def _moving_duration(segments: List[List[TrackPoint]]) -> Optional[float]:
+    """
+    Sum the time on GPS steps where implied speed >= _MIN_MOVING_SPEED_KMH.
+
+    Using moving time as the training label removes the effect of breaks,
+    making labels consistent across routes with different rest habits and
+    avoiding the inflation from long summit stops or lunch pauses.
+    Returns None when the GPX has no timestamps.
+    """
+    moving_s = 0.0
+    timed_steps = 0
+
+    for seg_pts in segments:
+        for a, b in zip(seg_pts[:-1], seg_pts[1:]):
+            if a.time_s == 0 or b.time_s == 0:
+                continue
+            dt = b.time_s - a.time_s
+            if dt <= 0:
+                continue
+            timed_steps += 1
+            dist_km = Chunk.haversine(a, b) / 1000.0
+            speed_kmh = dist_km / (dt / 3600.0)
+            if speed_kmh >= _MIN_MOVING_SPEED_KMH:
+                moving_s += dt
+
+    if timed_steps == 0:
+        return None
+    return moving_s / 60.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -232,7 +273,11 @@ FEATURE_NAMES = [
     "total_dist_km",
     "total_gain_m",
     "total_loss_m",
-    "total_tobler_min",  # ← single best predictor
+    "total_tobler_min",          # primary Tobler predictor (Stage 1)
+    # Split Tobler exposes ascent/descent pace asymmetry for Stage 2 residuals.
+    # Kept out of Stage 1 to avoid multicollinearity with total_loss_m.
+    "total_tobler_ascent_min",
+    "total_tobler_descent_min",
     # ── Slope statistics (terrain difficulty shape)
     "mean_grade",
     "mean_abs_grade",
@@ -243,6 +288,10 @@ FEATURE_NAMES = [
     "p90_tobler_min",
     "frac_steep",  # fraction of chunks with |grade| > 0.25
     "frac_very_steep",  # fraction of chunks with |grade| > 0.40
+    # Explicit steep-descent penalty: Tobler overestimates speed on grade < -0.25
+    # (knees, scrambling, unstable terrain). Included in Stage 1 physics so it
+    # is not over-shrunk by Ridge regularisation.
+    "total_steep_loss_m",
     # ── Derived
     "gain_per_km",
     "loss_per_km",
@@ -265,6 +314,8 @@ def aggregate_features(chunks: List[Chunk]) -> np.ndarray:
     total_gain_m = sum(f["gain_m"] for f in feats)
     total_loss_m = sum(f["loss_m"] for f in feats)
     total_tobler = sum(f["tobler_min"] for f in feats)
+    total_tobler_ascent = sum(f["tobler_ascent_min"] for f in feats)
+    total_tobler_descent = sum(f["tobler_descent_min"] for f in feats)
     total_dist_km = total_dist_m / 1000.0
 
     grades = np.array([f["mean_grade"] for f in feats])
@@ -272,8 +323,12 @@ def aggregate_features(chunks: List[Chunk]) -> np.ndarray:
     stds = np.array([f["grade_std"] for f in feats])
     toblers = np.array([f["tobler_min"] for f in feats])
 
+    steep_descent_mask = grades < -0.25
     frac_steep = float(np.mean(np.abs(grades) > 0.25))
     frac_very_steep = float(np.mean(np.abs(grades) > 0.40))
+    total_steep_loss_m = sum(
+        feats[i]["loss_m"] for i in range(len(feats)) if steep_descent_mask[i]
+    )
 
     eps = 1e-6
     vec = [
@@ -281,6 +336,8 @@ def aggregate_features(chunks: List[Chunk]) -> np.ndarray:
         total_gain_m,
         total_loss_m,
         total_tobler,
+        total_tobler_ascent,
+        total_tobler_descent,
         float(np.mean(grades)),
         float(np.mean(np.abs(grades))),
         float(np.max(max_grades)),
@@ -289,6 +346,7 @@ def aggregate_features(chunks: List[Chunk]) -> np.ndarray:
         float(np.percentile(toblers, 90)),
         frac_steep,
         frac_very_steep,
+        total_steep_loss_m,
         total_gain_m / (total_dist_km + eps),
         total_loss_m / (total_dist_km + eps),
         total_dist_km / (total_tobler + eps),
@@ -318,10 +376,19 @@ def gpx_to_features(
 
 def describe_gpx(path: str | Path, chunk_size_m: float = 200.0) -> dict:
     """Human-readable summary of a GPX file."""
-    segments, duration_min = parse_gpx(path)
+    segments, moving_min = parse_gpx(path)
     chunks = chunk_track(segments, chunk_size_m)
     X = aggregate_features(chunks)
     summary = dict(zip(FEATURE_NAMES, X.tolist()))
-    summary["actual_duration_min"] = duration_min
+    summary["moving_duration_min"] = moving_min
+
+    # Also compute total (first→last) duration for comparison
+    all_pts = [p for s in segments for p in s]
+    if all_pts:
+        t0, t1 = all_pts[0].time_s, all_pts[-1].time_s
+        summary["total_duration_min"] = (t1 - t0) / 60.0 if t0 > 0 and t1 > t0 else None
+    else:
+        summary["total_duration_min"] = None
+
     summary["n_trackpoints"] = sum(len(s) for s in segments)
     return summary

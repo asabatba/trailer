@@ -44,7 +44,11 @@ from gpx_features import FEATURE_NAMES, gpx_to_features
 # Indices into the feature vector (keep in sync with FEATURE_NAMES)
 _IDX = {name: i for i, name in enumerate(FEATURE_NAMES)}
 
-PHYSICS_FEATURES = ["total_tobler_min", "total_gain_m", "total_loss_m"]
+# Stage 1 uses only total_tobler_min: it already encodes gain + loss + distance
+# via Tobler's formula, so adding them explicitly causes multicollinearity.
+# total_steep_loss_m belongs in Stage 2: with moving-time labels its sign is
+# data-driven (small N can flip it), so Ridge regularisation is safer.
+PHYSICS_FEATURES = ["total_tobler_min"]
 PHYSICS_IDX = [_IDX[f] for f in PHYSICS_FEATURES]
 RESIDUAL_FEATURES = [f for f in FEATURE_NAMES if f not in PHYSICS_FEATURES]
 RESIDUAL_IDX = [_IDX[f] for f in RESIDUAL_FEATURES]
@@ -129,7 +133,7 @@ class HikingTimeModel:
 
     def save(self, path: str | Path):
         joblib.dump(self, path)
-        print(f"  Model saved → {path}")
+        print(f"  Model saved: {path}")
 
     @classmethod
     def load(cls, path: str | Path) -> "HikingTimeModel":
@@ -207,7 +211,7 @@ def build_dataset(
         y_vals.append(duration)
         names.append(path.stem)
         print(
-            f"  ✓ {path.name:40s}  {duration:7.1f} min  "
+            f"  + {path.name:40s}  {duration:7.1f} min  "
             f"({x_vec[_IDX['total_dist_km']]:.1f} km, "
             f"+{x_vec[_IDX['total_gain_m']]:.0f} m)"
         )
@@ -240,13 +244,13 @@ def loo_cv(
     mae = mean_absolute_error(y, y_pred_loo)
     mape = mean_absolute_percentage_error(y, y_pred_loo) * 100
 
-    print("\n─── LOO-CV Results ─────────────────────────────────────────────")
+    print("\n--- LOO-CV Results " + "-" * 44)
     print(f"  MAE  : {mae:.1f} min")
     print(f"  MAPE : {mape:.1f} %")
     print(f"\n  {'Route':40s} {'Actual':>8} {'Pred':>8} {'Error':>8}")
-    print(f"  {'─' * 40} {'─' * 8} {'─' * 8} {'─' * 8}")
+    print(f"  {'-' * 40} {'-' * 8} {'-' * 8} {'-' * 8}")
     for name, actual, pred, err in zip(names, y, y_pred_loo, errors):
-        flag = "  ← !" if abs(err) > 30 else ""
+        flag = "  <- !" if abs(err) > 30 else ""
         print(f"  {name:40s} {actual:8.1f} {pred:8.1f} {err:+8.1f}{flag}")
 
     return {

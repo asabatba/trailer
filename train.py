@@ -140,18 +140,15 @@ def main():
     # ── Feature importance ───────────────────────────────────────────────────
     print("\nFeature importance (normalised):")
     for feat, score in list(model.feature_importance().items())[:8]:
-        bar = "█" * int(score * 30)
+        bar = "#" * int(score * 30)
         print(f"  {feat:30s} {bar:<30s} {score:.3f}")
 
     # ── Physics stage diagnostics ────────────────────────────────────────────
     pm = model._physics_model
     if pm is not None:
-        coefs = dict(zip(["tobler_min", "total_gain_m", "total_loss_m"], pm.coef_))
         print(f"\nPhysics calibration (Tobler stage):")
-        print(f"  α·tobler_min  : {coefs['tobler_min']:.4f}  (1.0 = perfect Tobler)")
-        print(f"  β·gain_m      : {coefs['total_gain_m']:.4f} min/m")
-        print(f"  γ·loss_m      : {coefs['total_loss_m']:.4f} min/m")
-        print(f"  intercept     : {pm.intercept_:.2f} min")
+        print(f"  alpha*tobler_min : {pm.coef_[0]:.4f}  (1.0 = perfect Tobler)")
+        print(f"  intercept        : {pm.intercept_:.2f} min")
 
     # ── Save ─────────────────────────────────────────────────────────────────
     output = Path(args.output)
@@ -159,7 +156,7 @@ def main():
 
     if cv_results:
         print(
-            f"\n✓ Final model saved.  LOO-CV MAE: {cv_results['mae_min']:.1f} min "
+            f"\nFinal model saved.  LOO-CV MAE: {cv_results['mae_min']:.1f} min "
             f"({cv_results['mape_pct']:.1f}%)"
         )
 
