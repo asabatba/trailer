@@ -38,7 +38,11 @@ def load_labels(csv_path: Path) -> dict:
     with open(csv_path) as f:
         reader = csv.reader(f)
         for row in reader:
-            if not row or row[0].strip().lower() in ("filename_stem", "filename"):
+            if (
+                not row
+                or len(row) < 2
+                or row[0].strip().lower() in ("filename_stem", "filename")
+            ):
                 continue
             stem = row[0].strip()
             minutes = float(row[1].strip())

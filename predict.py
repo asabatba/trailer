@@ -13,8 +13,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from gpx_features import describe_gpx, gpx_to_features
+from gpx_features import FEATURE_NAMES, describe_gpx, gpx_to_features
 from model import HikingTimeModel
+
+_IDX = {name: i for i, name in enumerate(FEATURE_NAMES)}
 
 
 def format_duration(minutes: float) -> str:
@@ -61,8 +63,8 @@ def main():
             x_vec, actual = gpx_to_features(path, model.chunk_size_m)
             pred_min = model.predict_one(x_vec)
 
-            dist_km = x_vec[0]  # total_dist_km is index 0
-            gain_m = x_vec[1]  # total_gain_m  is index 1
+            dist_km = x_vec[_IDX["total_dist_km"]]
+            gain_m = x_vec[_IDX["total_gain_m"]]
             actual_str = format_duration(actual) if actual else "–"
 
             print(

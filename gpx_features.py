@@ -128,19 +128,23 @@ def _empty_chunk_features() -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def parse_gpx(path: str | Path) -> Tuple[List[TrackPoint], Optional[float]]:
+def parse_gpx(path: str | Path) -> Tuple[List[List[TrackPoint]], Optional[float]]:
     """
-    Returns (trackpoints, actual_duration_minutes).
+    Returns (segments, actual_duration_minutes).
+    segments is a list of TrackPoint lists, one per GPX segment — kept
+    separate so that chunk_track does not connect non-adjacent waypoints
+    across segment boundaries (e.g. device restarts mid-hike).
     actual_duration_minutes is None when the GPX has no timestamps.
     """
     with open(path) as f:
         gpx = gpxpy.parse(f)
 
-    points: List[TrackPoint] = []
+    segments: List[List[TrackPoint]] = []
     for track in gpx.tracks:
         for seg in track.segments:
+            seg_pts: List[TrackPoint] = []
             for pt in seg.points:
-                points.append(
+                seg_pts.append(
                     TrackPoint(
                         lat=pt.latitude,
                         lon=pt.longitude,
@@ -148,21 +152,29 @@ def parse_gpx(path: str | Path) -> Tuple[List[TrackPoint], Optional[float]]:
                         time_s=pt.time.timestamp() if pt.time else 0.0,
                     )
                 )
+            if seg_pts:
+                segments.append(seg_pts)
 
-    if not points:
-        for wpt in gpx.waypoints:
-            points.append(
-                TrackPoint(wpt.latitude, wpt.longitude, wpt.elevation or 0.0, 0.0)
-            )
+    if not segments:
+        wpt_pts = [
+            TrackPoint(w.latitude, w.longitude, w.elevation or 0.0, 0.0)
+            for w in gpx.waypoints
+        ]
+        if wpt_pts:
+            segments = [wpt_pts]
 
-    # Actual duration from timestamps (first ↔ last point)
+    if not segments:
+        return [], None
+
+    # Duration: first point of first segment → last point of last segment
+    all_pts = [p for s in segments for p in s]
+    t_start = all_pts[0].time_s
+    t_end = all_pts[-1].time_s
     duration_min: Optional[float] = None
-    t_start = points[0].time_s
-    t_end = points[-1].time_s
     if t_start > 0 and t_end > t_start:
         duration_min = (t_end - t_start) / 60.0
 
-    return points, duration_min
+    return segments, duration_min
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -170,13 +182,10 @@ def parse_gpx(path: str | Path) -> Tuple[List[TrackPoint], Optional[float]]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def chunk_track(points: List[TrackPoint], chunk_size_m: float = 200.0) -> List[Chunk]:
-    """
-    Split trackpoints into chunks of ~chunk_size_m horizontal distance.
-    The last chunk may be shorter.
-    """
+def _chunk_segment(points: List[TrackPoint], chunk_size_m: float) -> List[Chunk]:
+    """Split one contiguous segment of trackpoints into ~chunk_size_m chunks."""
     if len(points) < 2:
-        return [Chunk(points=points)]
+        return [Chunk(points=points)] if points else []
 
     chunks: List[Chunk] = []
     current_pts: List[TrackPoint] = [points[0]]
@@ -196,6 +205,21 @@ def chunk_track(points: List[TrackPoint], chunk_size_m: float = 200.0) -> List[C
     if len(current_pts) >= 2:
         chunks.append(Chunk(points=current_pts))
 
+    return chunks
+
+
+def chunk_track(
+    segments: List[List[TrackPoint]], chunk_size_m: float = 200.0
+) -> List[Chunk]:
+    """
+    Split track segments into chunks of ~chunk_size_m horizontal distance.
+    Each GPX segment is processed independently to avoid connecting
+    non-adjacent waypoints across segment boundaries.
+    The last chunk of each segment may be shorter than chunk_size_m.
+    """
+    chunks: List[Chunk] = []
+    for seg_pts in segments:
+        chunks.extend(_chunk_segment(seg_pts, chunk_size_m))
     return chunks
 
 
@@ -286,18 +310,18 @@ def gpx_to_features(
     End-to-end: GPX file → (feature_vector, actual_duration_minutes).
     actual_duration_minutes is None if the file has no timestamps.
     """
-    points, duration_min = parse_gpx(path)
-    chunks = chunk_track(points, chunk_size_m)
+    segments, duration_min = parse_gpx(path)
+    chunks = chunk_track(segments, chunk_size_m)
     X = aggregate_features(chunks)
     return X, duration_min
 
 
 def describe_gpx(path: str | Path, chunk_size_m: float = 200.0) -> dict:
     """Human-readable summary of a GPX file."""
-    points, duration_min = parse_gpx(path)
-    chunks = chunk_track(points, chunk_size_m)
+    segments, duration_min = parse_gpx(path)
+    chunks = chunk_track(segments, chunk_size_m)
     X = aggregate_features(chunks)
     summary = dict(zip(FEATURE_NAMES, X.tolist()))
     summary["actual_duration_min"] = duration_min
-    summary["n_trackpoints"] = len(points)
+    summary["n_trackpoints"] = sum(len(s) for s in segments)
     return summary
