@@ -219,6 +219,39 @@ def _moving_duration(segments: List[List[TrackPoint]]) -> Optional[float]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Elevation smoothing
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _smooth_elevations(
+    points: List[TrackPoint], window: int
+) -> List[TrackPoint]:
+    """
+    Return a new list of TrackPoints with elevations replaced by a rolling
+    median over `window` consecutive points.  lat/lon/time are unchanged.
+
+    Rolling median is robust to outlier GPS elevation spikes (bad fixes).
+    Edge points use whatever samples are available (no padding artefacts).
+    window=1 is a no-op.
+    """
+    if window <= 1 or len(points) < 2:
+        return points
+
+    eles = np.array([p.ele for p in points])
+    half = window // 2
+    smoothed = np.empty_like(eles)
+    for i in range(len(eles)):
+        lo = max(0, i - half)
+        hi = min(len(eles), i + half + 1)
+        smoothed[i] = np.median(eles[lo:hi])
+
+    return [
+        TrackPoint(p.lat, p.lon, float(smoothed[i]), p.time_s)
+        for i, p in enumerate(points)
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Chunking
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -284,12 +317,17 @@ def chunk_track(
     segments: List[List[TrackPoint]],
     chunk_size_m: float = 200.0,
     strategy: str = "distance",
+    ele_smooth_window: int = 1,
 ) -> List[Chunk]:
     """
     Split track segments into chunks.
 
     strategy='distance'  : chunk by horizontal distance (chunk_size_m metres)
     strategy='elevation' : chunk by cumulative |elevation change| (chunk_size_m metres)
+
+    ele_smooth_window : rolling-median window applied to elevation values before
+        chunking. 1 = disabled (default). Larger values remove GPS elevation noise
+        but also reduce the steep-descent signal the model relies on.
 
     Each GPX segment is processed independently to avoid connecting
     non-adjacent waypoints across segment boundaries.
@@ -301,7 +339,8 @@ def chunk_track(
     )
     chunks: List[Chunk] = []
     for seg_pts in segments:
-        chunks.extend(fn(seg_pts, chunk_size_m))
+        smoothed = _smooth_elevations(seg_pts, ele_smooth_window)
+        chunks.extend(fn(smoothed, chunk_size_m))
     return chunks
 
 
@@ -405,14 +444,17 @@ def gpx_to_features(
     path: str | Path,
     chunk_size_m: float = 200.0,
     chunk_strategy: str = "distance",
+    ele_smooth_window: int = 1,
 ) -> Tuple[np.ndarray, Optional[float]]:
     """
     End-to-end: GPX file → (feature_vector, actual_duration_minutes).
     actual_duration_minutes is None if the file has no timestamps.
     chunk_strategy: 'distance' or 'elevation'
+    ele_smooth_window: rolling-median window for elevation denoising (1 = off)
     """
     segments, duration_min = parse_gpx(path)
-    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy)
+    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy,
+                         ele_smooth_window=ele_smooth_window)
     X = aggregate_features(chunks)
     return X, duration_min
 
@@ -421,10 +463,12 @@ def describe_gpx(
     path: str | Path,
     chunk_size_m: float = 200.0,
     chunk_strategy: str = "distance",
+    ele_smooth_window: int = 1,
 ) -> dict:
     """Human-readable summary of a GPX file."""
     segments, moving_min = parse_gpx(path)
-    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy)
+    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy,
+                         ele_smooth_window=ele_smooth_window)
     X = aggregate_features(chunks)
     summary = dict(zip(FEATURE_NAMES, X.tolist()))
     summary["moving_duration_min"] = moving_min

@@ -68,6 +68,12 @@ def main():
         help="Chunking strategy: 'distance' (default) or 'elevation'",
     )
     ap.add_argument(
+        "--ele-smooth",
+        type=int,
+        default=1,
+        help="Elevation rolling-median window (1 = no smoothing, default)",
+    )
+    ap.add_argument(
         "--alpha",
         type=float,
         default=0.5,
@@ -110,10 +116,10 @@ def main():
         print(f"Loaded {len(labels)} manual labels from {args.labels}")
 
     # ── Build dataset ────────────────────────────────────────────────────────
-    print(f"\nExtracting features (chunk_size={args.chunk_size} m, strategy={args.chunk_strategy})…")
+    print(f"\nExtracting features (chunk_size={args.chunk_size} m, strategy={args.chunk_strategy}, ele_smooth={args.ele_smooth})…")
     X, y, names = build_dataset(
         gpx_files, labels=labels, chunk_size_m=args.chunk_size,
-        chunk_strategy=args.chunk_strategy,
+        chunk_strategy=args.chunk_strategy, ele_smooth_window=args.ele_smooth,
     )
 
     if len(y) < 3:
@@ -134,7 +140,7 @@ def main():
         print(f"\nRunning LOO-CV…")
         cv_results = loo_cv(
             X, y, names, ridge_alpha=args.alpha, chunk_size_m=args.chunk_size,
-            chunk_strategy=args.chunk_strategy,
+            chunk_strategy=args.chunk_strategy, ele_smooth_window=args.ele_smooth,
         )
     else:
         cv_results = None
@@ -145,6 +151,7 @@ def main():
         ridge_alpha=args.alpha,
         chunk_size_m=args.chunk_size,
         chunk_strategy=args.chunk_strategy,
+        ele_smooth_window=args.ele_smooth,
     )
     model.fit(X, y)
 

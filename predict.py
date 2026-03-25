@@ -61,7 +61,10 @@ def main():
             continue
         try:
             chunk_strategy = getattr(model, "chunk_strategy", "distance")
-            x_vec, actual = gpx_to_features(path, model.chunk_size_m, chunk_strategy)
+            ele_smooth = getattr(model, "ele_smooth_window", 1)
+            x_vec, actual = gpx_to_features(
+                path, model.chunk_size_m, chunk_strategy, ele_smooth
+            )
             pred_min = model.predict_one(x_vec)
 
             dist_km = x_vec[_IDX["total_dist_km"]]
@@ -76,7 +79,7 @@ def main():
             )
 
             if args.verbose:
-                info = describe_gpx(path, model.chunk_size_m)
+                info = describe_gpx(path, model.chunk_size_m, chunk_strategy, ele_smooth)
                 print(f"    tobler_baseline : {info['total_tobler_min']:.1f} min")
                 print(
                     f"    max_grade       : {info['max_grade']:.2f}  "
