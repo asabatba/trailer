@@ -75,13 +75,15 @@ class HikingTimeModel:
 
     def __init__(
         self,
-        ridge_alpha: float = 10.0,
+        ridge_alpha: float = 0.5,
         min_samples_for_residual: int = 12,
-        chunk_size_m: float = 200.0,
+        chunk_size_m: float = 600.0,
+        chunk_strategy: str = "distance",
     ):
         self.ridge_alpha = ridge_alpha
         self.min_samples_for_residual = min_samples_for_residual
         self.chunk_size_m = chunk_size_m
+        self.chunk_strategy = chunk_strategy
 
         self._physics_model: Optional[LinearRegression] = None
         self._residual_model: Optional[Ridge] = None
@@ -179,6 +181,7 @@ def build_dataset(
     gpx_paths: List[Path],
     labels: Optional[Dict[str, float]] = None,
     chunk_size_m: float = 200.0,
+    chunk_strategy: str = "distance",
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     """
     Build (X, y, names) from a list of GPX files.
@@ -191,7 +194,7 @@ def build_dataset(
 
     for path in sorted(gpx_paths):
         try:
-            x_vec, gps_duration = gpx_to_features(path, chunk_size_m)
+            x_vec, gps_duration = gpx_to_features(path, chunk_size_m, chunk_strategy)
         except Exception as exc:
             warnings.warn(f"Skipping {path.name}: {exc}")
             continue
@@ -233,13 +236,18 @@ def loo_cv(
     names: List[str],
     ridge_alpha: float = 10.0,
     chunk_size_m: float = 200.0,
+    chunk_strategy: str = "distance",
 ) -> Dict:
     """Leave-One-Out cross-validation report."""
     loo = LeaveOneOut()
     y_pred_loo = np.zeros_like(y)
 
     for train_idx, test_idx in loo.split(X):
-        m = HikingTimeModel(ridge_alpha=ridge_alpha, chunk_size_m=chunk_size_m)
+        m = HikingTimeModel(
+            ridge_alpha=ridge_alpha,
+            chunk_size_m=chunk_size_m,
+            chunk_strategy=chunk_strategy,
+        )
         m.fit(X[train_idx], y[train_idx])
         y_pred_loo[test_idx] = m.predict(X[test_idx])
 

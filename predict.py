@@ -60,7 +60,8 @@ def main():
             print(f"  WARNING: {path} not found, skipping.")
             continue
         try:
-            x_vec, actual = gpx_to_features(path, model.chunk_size_m)
+            chunk_strategy = getattr(model, "chunk_strategy", "distance")
+            x_vec, actual = gpx_to_features(path, model.chunk_size_m, chunk_strategy)
             pred_min = model.predict_one(x_vec)
 
             dist_km = x_vec[_IDX["total_dist_km"]]

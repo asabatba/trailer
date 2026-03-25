@@ -185,7 +185,7 @@ def parse_gpx(path: str | Path) -> Tuple[List[List[TrackPoint]], Optional[float]
 
 # Implied speed below this threshold is treated as a pause (rest, lunch, photos).
 # 0.5 km/h ≈ 8 m/min; even on very steep terrain hikers move faster than this.
-_MIN_MOVING_SPEED_KMH: float = 0.5
+_MIN_MOVING_SPEED_KMH: float = 0.7
 
 
 def _moving_duration(segments: List[List[TrackPoint]]) -> Optional[float]:
@@ -249,18 +249,59 @@ def _chunk_segment(points: List[TrackPoint], chunk_size_m: float) -> List[Chunk]
     return chunks
 
 
-def chunk_track(
-    segments: List[List[TrackPoint]], chunk_size_m: float = 200.0
+def _chunk_segment_by_elevation(
+    points: List[TrackPoint], chunk_ele_m: float
 ) -> List[Chunk]:
     """
-    Split track segments into chunks of ~chunk_size_m horizontal distance.
+    Split one contiguous segment into chunks of ~chunk_ele_m cumulative
+    absolute elevation change (|gain| + |loss|).  On flat terrain each
+    chunk will be long; on steep terrain chunks will be short, giving
+    finer resolution where the route is hardest.
+    """
+    if len(points) < 2:
+        return [Chunk(points=points)] if points else []
+
+    chunks: List[Chunk] = []
+    current_pts: List[TrackPoint] = [points[0]]
+    accumulated_ele = 0.0
+
+    for prev, curr in zip(points[:-1], points[1:]):
+        accumulated_ele += abs(curr.ele - prev.ele)
+        current_pts.append(curr)
+
+        if accumulated_ele >= chunk_ele_m:
+            chunks.append(Chunk(points=current_pts.copy()))
+            current_pts = [curr]
+            accumulated_ele = 0.0
+
+    if len(current_pts) >= 2:
+        chunks.append(Chunk(points=current_pts))
+
+    return chunks
+
+
+def chunk_track(
+    segments: List[List[TrackPoint]],
+    chunk_size_m: float = 200.0,
+    strategy: str = "distance",
+) -> List[Chunk]:
+    """
+    Split track segments into chunks.
+
+    strategy='distance'  : chunk by horizontal distance (chunk_size_m metres)
+    strategy='elevation' : chunk by cumulative |elevation change| (chunk_size_m metres)
+
     Each GPX segment is processed independently to avoid connecting
     non-adjacent waypoints across segment boundaries.
-    The last chunk of each segment may be shorter than chunk_size_m.
     """
+    fn = (
+        _chunk_segment_by_elevation
+        if strategy == "elevation"
+        else _chunk_segment
+    )
     chunks: List[Chunk] = []
     for seg_pts in segments:
-        chunks.extend(_chunk_segment(seg_pts, chunk_size_m))
+        chunks.extend(fn(seg_pts, chunk_size_m))
     return chunks
 
 
@@ -363,21 +404,27 @@ def aggregate_features(chunks: List[Chunk]) -> np.ndarray:
 def gpx_to_features(
     path: str | Path,
     chunk_size_m: float = 200.0,
+    chunk_strategy: str = "distance",
 ) -> Tuple[np.ndarray, Optional[float]]:
     """
     End-to-end: GPX file → (feature_vector, actual_duration_minutes).
     actual_duration_minutes is None if the file has no timestamps.
+    chunk_strategy: 'distance' or 'elevation'
     """
     segments, duration_min = parse_gpx(path)
-    chunks = chunk_track(segments, chunk_size_m)
+    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy)
     X = aggregate_features(chunks)
     return X, duration_min
 
 
-def describe_gpx(path: str | Path, chunk_size_m: float = 200.0) -> dict:
+def describe_gpx(
+    path: str | Path,
+    chunk_size_m: float = 200.0,
+    chunk_strategy: str = "distance",
+) -> dict:
     """Human-readable summary of a GPX file."""
     segments, moving_min = parse_gpx(path)
-    chunks = chunk_track(segments, chunk_size_m)
+    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy)
     X = aggregate_features(chunks)
     summary = dict(zip(FEATURE_NAMES, X.tolist()))
     summary["moving_duration_min"] = moving_min

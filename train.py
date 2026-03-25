@@ -58,14 +58,20 @@ def main():
     ap.add_argument(
         "--chunk-size",
         type=float,
-        default=200.0,
-        help="Chunk size in metres (default 200)",
+        default=600.0,
+        help="Chunk size in metres (default 600)",
+    )
+    ap.add_argument(
+        "--chunk-strategy",
+        default="distance",
+        choices=["distance", "elevation"],
+        help="Chunking strategy: 'distance' (default) or 'elevation'",
     )
     ap.add_argument(
         "--alpha",
         type=float,
-        default=10.0,
-        help="Ridge regularisation alpha (default 10.0)",
+        default=0.5,
+        help="Ridge regularisation alpha (default 0.5)",
     )
     ap.add_argument("--no-cv", action="store_true", help="Skip LOO cross-validation")
     ap.add_argument(
@@ -87,7 +93,7 @@ def main():
     # ── Describe mode ────────────────────────────────────────────────────────
     if args.describe:
         for p in gpx_files:
-            info = describe_gpx(p, args.chunk_size)
+            info = describe_gpx(p, args.chunk_size, args.chunk_strategy)
             print(f"\n{'─' * 60}")
             print(f"  {p.name}")
             for k, v in info.items():
@@ -104,8 +110,11 @@ def main():
         print(f"Loaded {len(labels)} manual labels from {args.labels}")
 
     # ── Build dataset ────────────────────────────────────────────────────────
-    print(f"\nExtracting features (chunk_size={args.chunk_size} m)…")
-    X, y, names = build_dataset(gpx_files, labels=labels, chunk_size_m=args.chunk_size)
+    print(f"\nExtracting features (chunk_size={args.chunk_size} m, strategy={args.chunk_strategy})…")
+    X, y, names = build_dataset(
+        gpx_files, labels=labels, chunk_size_m=args.chunk_size,
+        chunk_strategy=args.chunk_strategy,
+    )
 
     if len(y) < 3:
         print(
@@ -124,7 +133,8 @@ def main():
     if not args.no_cv and len(y) >= 3:
         print(f"\nRunning LOO-CV…")
         cv_results = loo_cv(
-            X, y, names, ridge_alpha=args.alpha, chunk_size_m=args.chunk_size
+            X, y, names, ridge_alpha=args.alpha, chunk_size_m=args.chunk_size,
+            chunk_strategy=args.chunk_strategy,
         )
     else:
         cv_results = None
@@ -134,6 +144,7 @@ def main():
     model = HikingTimeModel(
         ridge_alpha=args.alpha,
         chunk_size_m=args.chunk_size,
+        chunk_strategy=args.chunk_strategy,
     )
     model.fit(X, y)
 
