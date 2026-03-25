@@ -1,0 +1,12 @@
+[project]
+name = "trailer-v2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "gpxpy>=1.6.2",
+    "joblib>=1.5.3",
+    "numpy>=2.4.3",
+    "scikit-learn>=1.8.0",
+]
