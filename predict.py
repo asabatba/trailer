@@ -79,7 +79,9 @@ def main():
             )
 
             if args.verbose:
-                info = describe_gpx(path, model.chunk_size_m, chunk_strategy, ele_smooth)
+                info = describe_gpx(
+                    path, model.chunk_size_m, chunk_strategy, ele_smooth
+                )
                 print(f"    tobler_baseline : {info['total_tobler_min']:.1f} min")
                 print(
                     f"    max_grade       : {info['max_grade']:.2f}  "

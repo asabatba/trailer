@@ -223,9 +223,7 @@ def _moving_duration(segments: List[List[TrackPoint]]) -> Optional[float]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _smooth_elevations(
-    points: List[TrackPoint], window: int
-) -> List[TrackPoint]:
+def _smooth_elevations(points: List[TrackPoint], window: int) -> List[TrackPoint]:
     """
     Return a new list of TrackPoints with elevations replaced by a rolling
     median over `window` consecutive points.  lat/lon/time are unchanged.
@@ -382,9 +380,11 @@ def _chunk_segment_by_direction(
 
         step_dir = 1 if d_e > 0 else -1
 
-        if (current_dir is not None
-                and step_dir != current_dir
-                and dist_since_last >= min_dist_m):
+        if (
+            current_dir is not None
+            and step_dir != current_dir
+            and dist_since_last >= min_dist_m
+        ):
             split_starts.append(i)
             dist_since_last = 0.0
 
@@ -457,9 +457,11 @@ def _chunk_segment_by_grade_band(
         grad = d_e / d_h if d_h > 0.1 else 0.0
         band = _grade_band(grad)
 
-        if (current_band is not None
-                and band != current_band
-                and dist_since_last >= min_dist_m):
+        if (
+            current_band is not None
+            and band != current_band
+            and dist_since_last >= min_dist_m
+        ):
             split_starts.append(i)
             dist_since_last = 0.0
 
@@ -524,7 +526,7 @@ FEATURE_NAMES = [
     "total_dist_km",
     "total_gain_m",
     "total_loss_m",
-    "total_tobler_min",          # primary Tobler predictor (Stage 1)
+    "total_tobler_min",  # primary Tobler predictor (Stage 1)
     # Split Tobler exposes ascent/descent pace asymmetry for Stage 2 residuals.
     # Kept out of Stage 1 to avoid multicollinearity with total_loss_m.
     "total_tobler_ascent_min",
@@ -624,8 +626,12 @@ def gpx_to_features(
     ele_smooth_window: rolling-median window for elevation denoising (1 = off)
     """
     segments, duration_min = parse_gpx(path)
-    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy,
-                         ele_smooth_window=ele_smooth_window)
+    chunks = chunk_track(
+        segments,
+        chunk_size_m,
+        strategy=chunk_strategy,
+        ele_smooth_window=ele_smooth_window,
+    )
     X = aggregate_features(chunks)
     return X, duration_min
 
@@ -638,8 +644,12 @@ def describe_gpx(
 ) -> dict:
     """Human-readable summary of a GPX file."""
     segments, moving_min = parse_gpx(path)
-    chunks = chunk_track(segments, chunk_size_m, strategy=chunk_strategy,
-                         ele_smooth_window=ele_smooth_window)
+    chunks = chunk_track(
+        segments,
+        chunk_size_m,
+        strategy=chunk_strategy,
+        ele_smooth_window=ele_smooth_window,
+    )
     X = aggregate_features(chunks)
     summary = dict(zip(FEATURE_NAMES, X.tolist()))
     summary["moving_duration_min"] = moving_min

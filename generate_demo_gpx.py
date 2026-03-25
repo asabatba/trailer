@@ -30,8 +30,10 @@ GPX_TEMPLATE = """\
   </trk>
 </gpx>"""
 
-TRKPT_TEMPLATE = ('      <trkpt lat="{lat:.6f}" lon="{lon:.6f}">'
-                  '<ele>{ele:.1f}</ele><time>{time}</time></trkpt>')
+TRKPT_TEMPLATE = (
+    '      <trkpt lat="{lat:.6f}" lon="{lon:.6f}">'
+    "<ele>{ele:.1f}</ele><time>{time}</time></trkpt>"
+)
 
 
 def tobler_speed(gradient: float) -> float:
@@ -42,7 +44,7 @@ def tobler_speed(gradient: float) -> float:
 def generate_route(
     name: str,
     total_dist_km: float,
-    elevation_profile: list,   # [(frac_along_route, elevation_m)]
+    elevation_profile: list,  # [(frac_along_route, elevation_m)]
     start_lat: float = 41.7,
     start_lon: float = 1.9,
     point_spacing_m: float = 50.0,
@@ -56,8 +58,8 @@ def generate_route(
     rng = random.Random(hash(name))
 
     # Interpolate elevation profile
-    fracs   = [p[0] for p in elevation_profile]
-    eles    = [p[1] for p in elevation_profile]
+    fracs = [p[0] for p in elevation_profile]
+    eles = [p[1] for p in elevation_profile]
 
     def interp_ele(frac):
         for i in range(len(fracs) - 1):
@@ -87,15 +89,13 @@ def generate_route(
             de = interp_ele(next_frac) - interp_ele(frac)
             grad = de / point_spacing_m
             speed = tobler_speed(grad)
-            dt_h  = (point_spacing_m / 1000) / speed
+            dt_h = (point_spacing_m / 1000) / speed
             dt_min = dt_h * 60
             total_time_min += dt_min
             current_time += timedelta(hours=dt_h)
 
         time_str = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        pts.append(TRKPT_TEMPLATE.format(
-            lat=lat, lon=lon, ele=ele, time=time_str
-        ))
+        pts.append(TRKPT_TEMPLATE.format(lat=lat, lon=lon, ele=ele, time=time_str))
         lat += dlat_per_m * point_spacing_m * (0.7 + rng.random() * 0.3)
         lon += dlon_per_m * point_spacing_m * (0.5 + rng.random() * 0.3)
 
@@ -105,26 +105,82 @@ def generate_route(
 
 DEMO_ROUTES = [
     # (name, dist_km, elevation_profile)
-    ("flat_coastal_walk",       8.0,  [(0, 10), (1, 15)]),
-    ("gentle_hill_loop",       12.0,  [(0, 200), (0.4, 480), (0.7, 350), (1, 200)]),
-    ("montserrat_classic",     18.5,  [(0, 300), (0.3, 900), (0.6, 1200), (0.8, 950), (1, 300)]),
-    ("pedraforca_southeast",   14.0,  [(0, 1000), (0.35, 1800), (0.5, 2006), (0.65, 1800), (1, 1000)]),
-    ("pyrenees_long_trail",    35.0,  [(0, 1200), (0.2, 1600), (0.45, 2300), (0.6, 1900), (0.8, 2100), (1, 1400)]),
-    ("steep_scramble",          6.0,  [(0, 800), (0.5, 1700), (1, 800)]),
-    ("alpine_plateau",         22.0,  [(0, 2000), (0.1, 2400), (0.5, 2500), (0.9, 2380), (1, 2000)]),
-    ("valley_walk_easy",       10.0,  [(0, 500), (0.3, 600), (0.7, 550), (1, 500)]),
-    ("technical_ridge",         9.0,  [(0, 1400), (0.2, 1900), (0.4, 1750), (0.6, 2050), (0.8, 1900), (1, 1400)]),
-    ("forest_circuit",         16.0,  [(0, 400), (0.25, 750), (0.5, 600), (0.75, 820), (1, 400)]),
-    ("high_col_crossing",      20.0,  [(0, 1600), (0.4, 2700), (0.6, 2680), (1, 1500)]),
-    ("coastal_cliffs",         13.0,  [(0, 50), (0.2, 280), (0.4, 60), (0.6, 310), (0.8, 120), (1, 50)]),
-    ("summit_pyramid",          7.5,  [(0, 1200), (0.6, 2800), (1, 1200)]),
-    ("river_valley_traverse",  28.0,  [(0, 700), (0.15, 900), (0.5, 1300), (0.85, 950), (1, 700)]),
-    ("col_and_back",           11.0,  [(0, 1800), (0.5, 2500), (1, 1800)]),
-    ("long_ridge_walk",        25.0,  [(0, 1500), (0.1, 1900), (0.3, 2100), (0.5, 2200), (0.7, 2050), (0.9, 1800), (1, 1600)]),
-    ("exposed_scramble_hard",   5.0,  [(0, 1600), (0.4, 2300), (0.6, 2200), (1, 1600)]),
-    ("glacier_approach",       17.0,  [(0, 1400), (0.3, 2200), (0.7, 2900), (1, 2200)]),
-    ("easy_family_walk",        6.0,  [(0, 250), (0.5, 380), (1, 250)]),
-    ("mixed_terrain_epic",     40.0,  [(0, 900), (0.1, 1400), (0.3, 2100), (0.5, 1600), (0.7, 2300), (0.9, 1700), (1, 900)]),
+    ("flat_coastal_walk", 8.0, [(0, 10), (1, 15)]),
+    ("gentle_hill_loop", 12.0, [(0, 200), (0.4, 480), (0.7, 350), (1, 200)]),
+    (
+        "montserrat_classic",
+        18.5,
+        [(0, 300), (0.3, 900), (0.6, 1200), (0.8, 950), (1, 300)],
+    ),
+    (
+        "pedraforca_southeast",
+        14.0,
+        [(0, 1000), (0.35, 1800), (0.5, 2006), (0.65, 1800), (1, 1000)],
+    ),
+    (
+        "pyrenees_long_trail",
+        35.0,
+        [(0, 1200), (0.2, 1600), (0.45, 2300), (0.6, 1900), (0.8, 2100), (1, 1400)],
+    ),
+    ("steep_scramble", 6.0, [(0, 800), (0.5, 1700), (1, 800)]),
+    (
+        "alpine_plateau",
+        22.0,
+        [(0, 2000), (0.1, 2400), (0.5, 2500), (0.9, 2380), (1, 2000)],
+    ),
+    ("valley_walk_easy", 10.0, [(0, 500), (0.3, 600), (0.7, 550), (1, 500)]),
+    (
+        "technical_ridge",
+        9.0,
+        [(0, 1400), (0.2, 1900), (0.4, 1750), (0.6, 2050), (0.8, 1900), (1, 1400)],
+    ),
+    (
+        "forest_circuit",
+        16.0,
+        [(0, 400), (0.25, 750), (0.5, 600), (0.75, 820), (1, 400)],
+    ),
+    ("high_col_crossing", 20.0, [(0, 1600), (0.4, 2700), (0.6, 2680), (1, 1500)]),
+    (
+        "coastal_cliffs",
+        13.0,
+        [(0, 50), (0.2, 280), (0.4, 60), (0.6, 310), (0.8, 120), (1, 50)],
+    ),
+    ("summit_pyramid", 7.5, [(0, 1200), (0.6, 2800), (1, 1200)]),
+    (
+        "river_valley_traverse",
+        28.0,
+        [(0, 700), (0.15, 900), (0.5, 1300), (0.85, 950), (1, 700)],
+    ),
+    ("col_and_back", 11.0, [(0, 1800), (0.5, 2500), (1, 1800)]),
+    (
+        "long_ridge_walk",
+        25.0,
+        [
+            (0, 1500),
+            (0.1, 1900),
+            (0.3, 2100),
+            (0.5, 2200),
+            (0.7, 2050),
+            (0.9, 1800),
+            (1, 1600),
+        ],
+    ),
+    ("exposed_scramble_hard", 5.0, [(0, 1600), (0.4, 2300), (0.6, 2200), (1, 1600)]),
+    ("glacier_approach", 17.0, [(0, 1400), (0.3, 2200), (0.7, 2900), (1, 2200)]),
+    ("easy_family_walk", 6.0, [(0, 250), (0.5, 380), (1, 250)]),
+    (
+        "mixed_terrain_epic",
+        40.0,
+        [
+            (0, 900),
+            (0.1, 1400),
+            (0.3, 2100),
+            (0.5, 1600),
+            (0.7, 2300),
+            (0.9, 1700),
+            (1, 900),
+        ],
+    ),
 ]
 
 
@@ -134,7 +190,7 @@ def main():
 
     print(f"Generating {len(DEMO_ROUTES)} demo GPX files in ./{out_dir}/\n")
     print(f"{'Name':40s} {'Dist':>8} {'Duration':>12}")
-    print(f"{'─'*40} {'─'*8} {'─'*12}")
+    print(f"{'─' * 40} {'─' * 8} {'─' * 12}")
 
     for name, dist, profile in DEMO_ROUTES:
         gpx_str, dur = generate_route(name, dist, profile)

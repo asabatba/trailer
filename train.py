@@ -116,10 +116,15 @@ def main():
         print(f"Loaded {len(labels)} manual labels from {args.labels}")
 
     # ── Build dataset ────────────────────────────────────────────────────────
-    print(f"\nExtracting features (chunk_size={args.chunk_size} m, strategy={args.chunk_strategy}, ele_smooth={args.ele_smooth})…")
+    print(
+        f"\nExtracting features (chunk_size={args.chunk_size} m, strategy={args.chunk_strategy}, ele_smooth={args.ele_smooth})…"
+    )
     X, y, names = build_dataset(
-        gpx_files, labels=labels, chunk_size_m=args.chunk_size,
-        chunk_strategy=args.chunk_strategy, ele_smooth_window=args.ele_smooth,
+        gpx_files,
+        labels=labels,
+        chunk_size_m=args.chunk_size,
+        chunk_strategy=args.chunk_strategy,
+        ele_smooth_window=args.ele_smooth,
     )
 
     if len(y) < 3:
@@ -139,8 +144,13 @@ def main():
     if not args.no_cv and len(y) >= 3:
         print(f"\nRunning LOO-CV…")
         cv_results = loo_cv(
-            X, y, names, ridge_alpha=args.alpha, chunk_size_m=args.chunk_size,
-            chunk_strategy=args.chunk_strategy, ele_smooth_window=args.ele_smooth,
+            X,
+            y,
+            names,
+            ridge_alpha=args.alpha,
+            chunk_size_m=args.chunk_size,
+            chunk_strategy=args.chunk_strategy,
+            ele_smooth_window=args.ele_smooth,
         )
     else:
         cv_results = None
@@ -165,7 +175,9 @@ def main():
     pm = model._physics_model
     if pm is not None:
         print(f"\nPhysics calibration (Tobler stage):")
-        print(f"  alpha*tobler_min : {pm.coef_[0]:.4f}  (1.0 = perfect Tobler, no intercept)")
+        print(
+            f"  alpha*tobler_min : {pm.coef_[0]:.4f}  (1.0 = perfect Tobler, no intercept)"
+        )
 
     # ── Save ─────────────────────────────────────────────────────────────────
     output = Path(args.output)

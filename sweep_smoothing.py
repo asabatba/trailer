@@ -27,14 +27,20 @@ def main():
         X, y, names = build_dataset(
             gpx_files, chunk_size_m=CHUNK_SIZE, ele_smooth_window=w
         )
-        r = loo_cv(X, y, names, ridge_alpha=RIDGE_ALPHA, chunk_size_m=CHUNK_SIZE,
-                   ele_smooth_window=w)
+        r = loo_cv(
+            X,
+            y,
+            names,
+            ridge_alpha=RIDGE_ALPHA,
+            chunk_size_m=CHUNK_SIZE,
+            ele_smooth_window=w,
+        )
         results.append((w, r["mae_min"], r["mape_pct"]))
         print(f"  window={w:3d}  MAE={r['mae_min']:.1f} min  MAPE={r['mape_pct']:.1f}%")
 
     print("\n--- Summary ---")
     print(f"  {'Window':>8} {'MAE (min)':>10} {'MAPE (%)':>10}")
-    print(f"  {'-'*8} {'-'*10} {'-'*10}")
+    print(f"  {'-' * 8} {'-' * 10} {'-' * 10}")
     best = min(results, key=lambda r: r[1])
     for w, mae, mape in results:
         marker = "  <-- BEST" if w == best[0] else ""

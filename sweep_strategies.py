@@ -44,8 +44,12 @@ RESIDUAL_COLS = [i for i in range(len(FEATURE_NAMES)) if i != TOBLER_COL]
 
 # Distribution features used for the fine-scale layer in multiscale
 DIST_FEATURE_NAMES = [
-    "p75_tobler_min", "p90_tobler_min", "grade_std_mean",
-    "frac_steep", "frac_very_steep", "n_chunks",
+    "p75_tobler_min",
+    "p90_tobler_min",
+    "grade_std_mean",
+    "frac_steep",
+    "frac_very_steep",
+    "n_chunks",
 ]
 DIST_IDXS = [_IDX[f] for f in DIST_FEATURE_NAMES]
 
@@ -53,6 +57,7 @@ DIST_IDXS = [_IDX[f] for f in DIST_FEATURE_NAMES]
 # ─────────────────────────────────────────────────────────────────────────────
 # Generic two-stage LOO-CV (works with any feature matrix width)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def loo_cv_generic(
     X: np.ndarray,
@@ -95,7 +100,7 @@ def loo_cv_generic(
     if verbose:
         errors = y_pred - y
         print(f"\n  {'Route':42s} {'Actual':>8} {'Pred':>8} {'Error':>8}")
-        print(f"  {'-'*42} {'-'*8} {'-'*8} {'-'*8}")
+        print(f"  {'-' * 42} {'-' * 8} {'-' * 8} {'-' * 8}")
         for name, actual, pred, err in zip(names, y, y_pred, errors):
             flag = "  <!" if abs(err) > 30 else ""
             print(f"  {name:42s} {actual:8.1f} {pred:8.1f} {err:+8.1f}{flag}")
@@ -106,6 +111,7 @@ def loo_cv_generic(
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataset builders for each strategy
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_standard(gpx_files, chunk_size_m, strategy):
     """Use existing build_dataset for direction / grade_band / elevation / tobler."""
@@ -118,6 +124,7 @@ def build_standard(gpx_files, chunk_size_m, strategy):
 def build_fixed_count(gpx_files, n_chunks):
     """Each route is split into exactly n_chunks equal-distance segments."""
     import warnings
+
     X_rows, y_vals, names = [], [], []
     for path in sorted(gpx_files):
         try:
@@ -130,9 +137,7 @@ def build_fixed_count(gpx_files, n_chunks):
             continue
 
         total_dist_m = sum(
-            Chunk.haversine(a, b)
-            for seg in segments
-            for a, b in zip(seg[:-1], seg[1:])
+            Chunk.haversine(a, b) for seg in segments for a, b in zip(seg[:-1], seg[1:])
         )
         chunk_size = max(total_dist_m / n_chunks, 50.0)
         chunks = chunk_track(segments, chunk_size, strategy="distance")
@@ -154,6 +159,7 @@ def build_multiscale(gpx_files, fine_m, coarse_m):
     total_tobler_min is still at coarse index 3 = TOBLER_COL.
     """
     import warnings
+
     X_rows, y_vals, names = [], [], []
     for path in sorted(gpx_files):
         try:
@@ -178,9 +184,11 @@ def build_multiscale(gpx_files, fine_m, coarse_m):
 # Main sweep
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def sweep(label, X, y, names, tobler_col=TOBLER_COL, verbose=False):
-    mae, mape = loo_cv_generic(X, y, names, tobler_col=tobler_col,
-                               label=label, verbose=verbose)
+    mae, mape = loo_cv_generic(
+        X, y, names, tobler_col=tobler_col, label=label, verbose=verbose
+    )
     print(f"  {label:40s}  MAE={mae:5.1f} min  MAPE={mape:4.1f}%")
     return mae, mape
 
@@ -240,7 +248,7 @@ def main():
     print("SUMMARY  (baseline = distance-600m, MAE=13.8 min)")
     print("=" * 65)
     print(f"  {'Config':40s} {'MAE':>8} {'MAPE':>8} {'vs base':>8}")
-    print(f"  {'-'*40} {'-'*8} {'-'*8} {'-'*8}")
+    print(f"  {'-' * 40} {'-' * 8} {'-' * 8} {'-' * 8}")
     best = min(results, key=lambda r: r[1])
     for label, mae, mape in sorted(results, key=lambda r: r[1]):
         delta = mae - mae_ref

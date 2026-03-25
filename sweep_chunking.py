@@ -32,7 +32,11 @@ def run(strategy: str, chunk_size: float, gpx_files) -> dict:
     if len(y) < 3:
         return {"mae_min": float("nan"), "mape_pct": float("nan")}
     result = loo_cv(
-        X, y, names, ridge_alpha=RIDGE_ALPHA, chunk_size_m=chunk_size,
+        X,
+        y,
+        names,
+        ridge_alpha=RIDGE_ALPHA,
+        chunk_size_m=chunk_size,
         chunk_strategy=strategy,
     )
     return result
