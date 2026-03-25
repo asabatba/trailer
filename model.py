@@ -102,8 +102,11 @@ class HikingTimeModel:
         )
 
         # Stage 1 – physics calibration
+        # fit_intercept=False: moving time is proportional to effort.
+        # A fixed intercept would add the same overhead regardless of route
+        # length, which is unphysical. α encodes pace relative to Tobler.
         X_phys = X[:, PHYSICS_IDX]
-        self._physics_model = LinearRegression()
+        self._physics_model = LinearRegression(fit_intercept=False)
         self._physics_model.fit(X_phys, y)
 
         # Stage 2 – residual correction

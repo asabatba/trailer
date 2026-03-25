@@ -147,8 +147,7 @@ def main():
     pm = model._physics_model
     if pm is not None:
         print(f"\nPhysics calibration (Tobler stage):")
-        print(f"  alpha*tobler_min : {pm.coef_[0]:.4f}  (1.0 = perfect Tobler)")
-        print(f"  intercept        : {pm.intercept_:.2f} min")
+        print(f"  alpha*tobler_min : {pm.coef_[0]:.4f}  (1.0 = perfect Tobler, no intercept)")
 
     # ── Save ─────────────────────────────────────────────────────────────────
     output = Path(args.output)
