@@ -350,6 +350,132 @@ def _chunk_segment_by_tobler(
     return chunks
 
 
+def _chunk_segment_by_direction(
+    points: List[TrackPoint], min_dist_m: float = 150.0
+) -> List[Chunk]:
+    """
+    Split at ascent→descent and descent→ascent reversals.
+
+    Uses smoothed elevation (window=11) to find macro direction, so GPS
+    noise doesn't trigger false splits.  Only splits when at least
+    min_dist_m of horizontal distance has been covered since the last split.
+    Raw (unsmoothed) points are used in the returned chunks.
+    """
+    n = len(points)
+    if n < 2:
+        return [Chunk(points=points)] if points else []
+
+    w = min(11, max(3, (n // 2) * 2 - 1))  # largest odd window ≤ 11
+    smoothed = _smooth_elevations(points, window=w)
+
+    split_starts = [0]
+    dist_since_last = 0.0
+    current_dir: Optional[int] = None  # +1 ascending, -1 descending
+
+    for i in range(1, n):
+        d_h = Chunk.haversine(points[i - 1], points[i])
+        dist_since_last += d_h
+        d_e = smoothed[i].ele - smoothed[i - 1].ele
+
+        if abs(d_e) < 0.05:  # ignore negligible elevation change
+            continue
+
+        step_dir = 1 if d_e > 0 else -1
+
+        if (current_dir is not None
+                and step_dir != current_dir
+                and dist_since_last >= min_dist_m):
+            split_starts.append(i)
+            dist_since_last = 0.0
+
+        current_dir = step_dir
+
+    # Build chunks: points[split_starts[j] … split_starts[j+1]] (boundary shared)
+    chunks = []
+    for j in range(len(split_starts)):
+        s = split_starts[j]
+        e = split_starts[j + 1] if j + 1 < len(split_starts) else n - 1
+        chunk_pts = points[s : e + 1]
+        if len(chunk_pts) >= 2:
+            chunks.append(Chunk(points=chunk_pts))
+
+    return chunks
+
+
+def _grade_band(grade: float) -> int:
+    """
+    Map a gradient to a band index (sign-aware):
+      -3 very steep descent  (<-0.20)
+      -2 steep descent       (-0.20 … -0.10)
+      -1 gentle descent      (-0.10 … -0.03)
+       0 flat                (-0.03 …  0.03)
+      +1 gentle climb        ( 0.03 …  0.10)
+      +2 steep climb         ( 0.10 …  0.20)
+      +3 very steep climb    (>0.20)
+    """
+    if grade > 0.20:
+        return 3
+    elif grade > 0.10:
+        return 2
+    elif grade > 0.03:
+        return 1
+    elif grade >= -0.03:
+        return 0
+    elif grade >= -0.10:
+        return -1
+    elif grade >= -0.20:
+        return -2
+    else:
+        return -3
+
+
+def _chunk_segment_by_grade_band(
+    points: List[TrackPoint], min_dist_m: float = 150.0
+) -> List[Chunk]:
+    """
+    Split when the local terrain grade-band changes category.
+
+    Grade is estimated from the smoothed elevation profile to avoid
+    noise-induced band flickering.  Splits are only made after at
+    least min_dist_m of horizontal travel since the previous split.
+    """
+    n = len(points)
+    if n < 2:
+        return [Chunk(points=points)] if points else []
+
+    w = min(11, max(3, (n // 2) * 2 - 1))
+    smoothed = _smooth_elevations(points, window=w)
+
+    split_starts = [0]
+    dist_since_last = 0.0
+    current_band: Optional[int] = None
+
+    for i in range(1, n):
+        d_h = Chunk.haversine(points[i - 1], points[i])
+        dist_since_last += d_h
+        d_e = smoothed[i].ele - smoothed[i - 1].ele
+        grad = d_e / d_h if d_h > 0.1 else 0.0
+        band = _grade_band(grad)
+
+        if (current_band is not None
+                and band != current_band
+                and dist_since_last >= min_dist_m):
+            split_starts.append(i)
+            dist_since_last = 0.0
+
+        current_band = band
+
+    chunks = []
+    for j in range(len(split_starts)):
+        s = split_starts[j]
+        e = split_starts[j + 1] if j + 1 < len(split_starts) else n - 1
+        chunk_pts = points[s : e + 1]
+        if len(chunk_pts) >= 2:
+            chunks.append(Chunk(points=chunk_pts))
+
+    return chunks
+
+
 def chunk_track(
     segments: List[List[TrackPoint]],
     chunk_size_m: float = 200.0,
@@ -359,10 +485,11 @@ def chunk_track(
     """
     Split track segments into chunks.
 
-    strategy='distance'  : chunk by horizontal distance (chunk_size_m metres)
-    strategy='elevation' : chunk by cumulative |elevation change| (chunk_size_m metres)
-    strategy='tobler'    : chunk by accumulated Tobler time (chunk_size_m = minutes)
-                           steep terrain → small chunks, flat terrain → large chunks
+    strategy='distance'   : chunk by horizontal distance (chunk_size_m metres)
+    strategy='elevation'  : chunk by cumulative |elevation change| (chunk_size_m metres)
+    strategy='tobler'     : chunk by accumulated Tobler time (chunk_size_m = minutes)
+    strategy='direction'  : split at ascent/descent reversals (chunk_size_m = min dist m)
+    strategy='grade_band' : split at terrain-category changes (chunk_size_m = min dist m)
 
     ele_smooth_window : rolling-median window applied to elevation values before
         chunking. 1 = disabled (default). Larger values remove GPS elevation noise
@@ -375,6 +502,10 @@ def chunk_track(
         fn = _chunk_segment_by_elevation
     elif strategy == "tobler":
         fn = _chunk_segment_by_tobler
+    elif strategy == "direction":
+        fn = _chunk_segment_by_direction
+    elif strategy == "grade_band":
+        fn = _chunk_segment_by_grade_band
     else:
         fn = _chunk_segment
     chunks: List[Chunk] = []
