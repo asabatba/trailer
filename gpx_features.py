@@ -313,6 +313,43 @@ def _chunk_segment_by_elevation(
     return chunks
 
 
+def _chunk_segment_by_tobler(
+    points: List[TrackPoint], chunk_tobler_min: float
+) -> List[Chunk]:
+    """
+    Split one contiguous segment into chunks of ~chunk_tobler_min accumulated
+    theoretical Tobler time.
+
+    Steep sections (slow Tobler speed) produce short, fine-grained chunks;
+    flat sections produce long coarse chunks.  This gives the most resolution
+    exactly where difficulty varies — the natural unit for time prediction.
+    """
+    if len(points) < 2:
+        return [Chunk(points=points)] if points else []
+
+    chunks: List[Chunk] = []
+    current_pts: List[TrackPoint] = [points[0]]
+    accumulated_min = 0.0
+
+    for prev, curr in zip(points[:-1], points[1:]):
+        d_h = Chunk.haversine(prev, curr)
+        d_e = curr.ele - prev.ele
+        grad = d_e / d_h if d_h > 0.1 else 0.0
+        speed_kmh = max(6.0 * math.exp(-3.5 * abs(grad + 0.05)), 0.1)
+        accumulated_min += (d_h / 1000.0) / speed_kmh * 60.0
+        current_pts.append(curr)
+
+        if accumulated_min >= chunk_tobler_min:
+            chunks.append(Chunk(points=current_pts.copy()))
+            current_pts = [curr]
+            accumulated_min = 0.0
+
+    if len(current_pts) >= 2:
+        chunks.append(Chunk(points=current_pts))
+
+    return chunks
+
+
 def chunk_track(
     segments: List[List[TrackPoint]],
     chunk_size_m: float = 200.0,
@@ -324,6 +361,8 @@ def chunk_track(
 
     strategy='distance'  : chunk by horizontal distance (chunk_size_m metres)
     strategy='elevation' : chunk by cumulative |elevation change| (chunk_size_m metres)
+    strategy='tobler'    : chunk by accumulated Tobler time (chunk_size_m = minutes)
+                           steep terrain → small chunks, flat terrain → large chunks
 
     ele_smooth_window : rolling-median window applied to elevation values before
         chunking. 1 = disabled (default). Larger values remove GPS elevation noise
@@ -332,11 +371,12 @@ def chunk_track(
     Each GPX segment is processed independently to avoid connecting
     non-adjacent waypoints across segment boundaries.
     """
-    fn = (
-        _chunk_segment_by_elevation
-        if strategy == "elevation"
-        else _chunk_segment
-    )
+    if strategy == "elevation":
+        fn = _chunk_segment_by_elevation
+    elif strategy == "tobler":
+        fn = _chunk_segment_by_tobler
+    else:
+        fn = _chunk_segment
     chunks: List[Chunk] = []
     for seg_pts in segments:
         smoothed = _smooth_elevations(seg_pts, ele_smooth_window)

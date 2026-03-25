@@ -64,8 +64,8 @@ def main():
     ap.add_argument(
         "--chunk-strategy",
         default="distance",
-        choices=["distance", "elevation"],
-        help="Chunking strategy: 'distance' (default) or 'elevation'",
+        choices=["distance", "elevation", "tobler"],
+        help="Chunking strategy: 'distance' (default), 'elevation', or 'tobler'",
     )
     ap.add_argument(
         "--ele-smooth",

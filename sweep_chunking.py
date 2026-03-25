@@ -16,7 +16,11 @@ GPX_DIR = Path("hiking_tracks")
 RIDGE_ALPHA = 0.5
 
 # Distance strategy: sizes in metres (horizontal distance per chunk)
-DISTANCE_SIZES = [500, 600, 700, 800, 1000, 1500]
+DISTANCE_SIZES = []  # already tested, skip
+
+# Tobler strategy: sizes in minutes of theoretical hiking time per chunk.
+# Dataset avg ~300 min Tobler / ~27 chunks at 600m = ~11 min/chunk baseline.
+TOBLER_SIZES = [5, 7, 9, 11, 13, 15, 20]
 
 ELEVATION_SIZES = []  # already tested, skip
 
@@ -44,13 +48,23 @@ def main():
 
     results = []
 
-    print("=" * 60)
-    print("DISTANCE-BASED CHUNKING")
-    print("=" * 60)
-    for size in DISTANCE_SIZES:
-        print(f"\n--- distance / {size} m ---")
-        r = run("distance", size, gpx_files)
-        results.append(("distance", size, r["mae_min"], r["mape_pct"]))
+    if DISTANCE_SIZES:
+        print("=" * 60)
+        print("DISTANCE-BASED CHUNKING")
+        print("=" * 60)
+        for size in DISTANCE_SIZES:
+            print(f"\n--- distance / {size} m ---")
+            r = run("distance", size, gpx_files)
+            results.append(("distance", size, r["mae_min"], r["mape_pct"]))
+
+    if TOBLER_SIZES:
+        print("=" * 60)
+        print("TOBLER-TIME CHUNKING")
+        print("=" * 60)
+        for size in TOBLER_SIZES:
+            print(f"\n--- tobler / {size} min ---")
+            r = run("tobler", size, gpx_files)
+            results.append(("tobler", size, r["mae_min"], r["mape_pct"]))
 
     if ELEVATION_SIZES:
         print("\n" + "=" * 60)
