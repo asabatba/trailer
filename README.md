@@ -68,31 +68,31 @@ Every sample becomes the test set exactly once — no data is wasted.
 
 ## Chunk features
 
-| Feature | Description |
-|---|---|
-| `dist_m` | Horizontal distance of chunk |
-| `gain_m` | Elevation gained (metres) |
-| `loss_m` | Elevation lost (abs metres) |
-| `mean_grade` | Mean rise/run ratio |
-| `max_grade` | Max rise/run in chunk |
-| `grade_std` | Slope variability (roughness proxy) |
-| `tobler_min` | Tobler time for this chunk |
-| `difficulty` | `gain·1.0 + loss·0.5 + dist·0.001` |
+| Feature      | Description                         |
+|--------------|-------------------------------------|
+| `dist_m`     | Horizontal distance of chunk        |
+| `gain_m`     | Elevation gained (metres)           |
+| `loss_m`     | Elevation lost (abs metres)         |
+| `mean_grade` | Mean rise/run ratio                 |
+| `max_grade`  | Max rise/run in chunk               |
+| `grade_std`  | Slope variability (roughness proxy) |
+| `tobler_min` | Tobler time for this chunk          |
+| `difficulty` | `gain·1.0 + loss·0.5 + dist·0.001`  |
 
 ## Aggregated features (model input)
 
-| Feature | Why it matters |
-|---|---|
-| `total_dist_km` | Distance baseline |
-| `total_gain_m` | Primary effort driver |
-| `total_loss_m` | Knee/pace cost |
-| `total_tobler_min` | **Best single predictor** |
-| `mean_grade`, `max_grade`, `grade_std_mean` | Terrain shape |
-| `p75_tobler_min`, `p90_tobler_min` | Bottleneck segments |
-| `frac_steep`, `frac_very_steep` | Technical difficulty |
-| `gain_per_km`, `loss_per_km` | Grade density |
-| `tobler_efficiency` | Pace proxy |
-| `n_chunks` | Route resolution |
+| Feature                                     | Why it matters            |
+|---------------------------------------------|---------------------------|
+| `total_dist_km`                             | Distance baseline         |
+| `total_gain_m`                              | Primary effort driver     |
+| `total_loss_m`                              | Knee/pace cost            |
+| `total_tobler_min`                          | **Best single predictor** |
+| `mean_grade`, `max_grade`, `grade_std_mean` | Terrain shape             |
+| `p75_tobler_min`, `p90_tobler_min`          | Bottleneck segments       |
+| `frac_steep`, `frac_very_steep`             | Technical difficulty      |
+| `gain_per_km`, `loss_per_km`                | Grade density             |
+| `tobler_efficiency`                         | Pace proxy                |
+| `n_chunks`                                  | Route resolution          |
 
 ---
 
@@ -154,10 +154,10 @@ trailer-server --reload
 
 ## Tuning
 
-| Parameter | Default | Effect |
-|---|---|---|
-| `--chunk-size` | 200 m | Smaller → more granular features, slower. Try 100–500 m |
-| `--alpha` | 10.0 | Higher → more conservative residual correction |
+| Parameter      | Default | Effect                                                  |
+|----------------|---------|---------------------------------------------------------|
+| `--chunk-size` | 200 m   | Smaller → more granular features, slower. Try 100–500 m |
+| `--alpha`      | 10.0    | Higher → more conservative residual correction          |
 
 **Chunk size guidance:**
 
