@@ -29,6 +29,7 @@ Duration (minutes)
 ## Why this architecture?
 
 ### The small-data problem
+
 With N=20, standard ML models overfit immediately.  
 A plain Ridge regressor has 16+ weights to fit — more parameters than data points.
 
@@ -59,6 +60,7 @@ This works well even with **5 samples**.
 A Ridge regressor learns the residual from Stage 1 using terrain shape features: roughness, fraction of steep terrain, grade distribution.  Strongly regularised (α=10) to prevent overfitting.
 
 ### LOO-CV, not k-fold
+
 With N=20, Leave-One-Out CV is the correct evaluation strategy.  
 Every sample becomes the test set exactly once — no data is wasted.
 
@@ -103,6 +105,7 @@ uv sync
 ## Usage
 
 ### Training (GPX files with timestamps)
+
 ```bash
 # GPS-recorded tracks (timestamps extracted automatically)
 trailer-train --gpx-dir ./my_hikes --output model.pkl
@@ -112,6 +115,7 @@ trailer-train --gpx-dir ./my_hikes --labels labels.csv --output model.pkl
 ```
 
 ### Labels CSV format
+
 ```
 hike_montserrat,187
 hike_pedraforca,310
@@ -119,23 +123,27 @@ pyrenees_tour,485
 ```
 
 ### Prediction
+
 ```bash
 trailer-predict model.pkl new_route.gpx
 trailer-predict model.pkl --dir ./routes/ --verbose
 ```
 
 ### Inspect a GPX
+
 ```bash
 trailer-train --gpx-dir ./my_hikes --describe
 ```
 
 ### Generate test data
+
 ```bash
 trailer-generate-demo
 trailer-train --gpx-dir demo_gpx --output model.pkl
 ```
 
 ### API server
+
 ```bash
 uv run uvicorn trailer.server:app --reload
 # or
@@ -152,6 +160,7 @@ trailer-server --reload
 | `--alpha` | 10.0 | Higher → more conservative residual correction |
 
 **Chunk size guidance:**
+
 - 100 m — best for short technical routes (< 10 km)
 - 200 m — good default balance  
 - 500 m — better for very long routes (> 30 km), reduces noise
