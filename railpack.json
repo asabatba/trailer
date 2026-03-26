@@ -1,0 +1,21 @@
+{
+    "$schema": "https://schema.railpack.com",
+    "buildAptPackages": [
+        "build-essential",
+        "g++-13",
+        "cmake"
+    ],
+    "steps": {
+        "setup": {
+            "variables": {
+                "CXX": "g++-13",
+                "CC": "gcc-13"
+            }
+        }
+    },
+    "deploy": {
+        "aptPackages": [
+            "libstdc++6"
+        ]
+    }
+}
