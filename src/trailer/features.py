@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import gpxpy
+import fastgpx
 import numpy as np
 
 
@@ -150,11 +150,17 @@ def parse_gpx(path: str | Path) -> Tuple[List[List[TrackPoint]], Optional[float]
     across segment boundaries (e.g. device restarts mid-hike).
     actual_duration_minutes is None when the GPX has no timestamps.
     """
-    with open(path) as f:
-        gpx = gpxpy.parse(f)
+    return parse_gpx_xml(fastgpx.load(Path(path)))
+
+
+def parse_gpx_xml(
+    gpx: str | fastgpx.Gpx,
+) -> Tuple[List[List[TrackPoint]], Optional[float]]:
+    """Parse GPX XML content or a preloaded GPX object."""
+    parsed = fastgpx.parse(gpx) if isinstance(gpx, str) else gpx
 
     segments: List[List[TrackPoint]] = []
-    for track in gpx.tracks:
+    for track in parsed.tracks:
         for seg in track.segments:
             seg_pts: List[TrackPoint] = []
             for pt in seg.points:
@@ -172,7 +178,7 @@ def parse_gpx(path: str | Path) -> Tuple[List[List[TrackPoint]], Optional[float]
     if not segments:
         wpt_pts = [
             TrackPoint(w.latitude, w.longitude, w.elevation or 0.0, 0.0)
-            for w in gpx.waypoints
+            for w in getattr(parsed, "waypoints", ())
         ]
         if wpt_pts:
             segments = [wpt_pts]
@@ -626,6 +632,31 @@ def gpx_to_features(
     ele_smooth_window: rolling-median window for elevation denoising (1 = off)
     """
     segments, duration_min = parse_gpx(path)
+    return _segments_to_features(
+        segments, duration_min, chunk_size_m, chunk_strategy, ele_smooth_window
+    )
+
+
+def gpx_xml_to_features(
+    gpx: str | fastgpx.Gpx,
+    chunk_size_m: float = 200.0,
+    chunk_strategy: str = "distance",
+    ele_smooth_window: int = 1,
+) -> Tuple[np.ndarray, Optional[float]]:
+    """End-to-end: GPX XML in memory → (feature_vector, actual_duration_minutes)."""
+    segments, duration_min = parse_gpx_xml(gpx)
+    return _segments_to_features(
+        segments, duration_min, chunk_size_m, chunk_strategy, ele_smooth_window
+    )
+
+
+def _segments_to_features(
+    segments: List[List[TrackPoint]],
+    duration_min: Optional[float],
+    chunk_size_m: float,
+    chunk_strategy: str,
+    ele_smooth_window: int,
+) -> Tuple[np.ndarray, Optional[float]]:
     chunks = chunk_track(
         segments,
         chunk_size_m,

@@ -1,6 +1,5 @@
 import asyncio
 import importlib
-import io
 import sys
 import unittest
 from importlib.resources import files
@@ -9,7 +8,6 @@ from unittest.mock import patch
 
 import numpy as np
 from fastapi import HTTPException
-from starlette.datastructures import UploadFile
 from starlette.requests import Request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +51,15 @@ class FakeModel:
         return 184.2
 
 
+class FakeUploadFile:
+    def __init__(self, filename: str, body: bytes):
+        self.filename = filename
+        self._body = body
+
+    async def read(self):
+        return self._body
+
+
 class PackageTests(unittest.TestCase):
     def test_imports_and_bundled_model_resource_exist(self):
         self.assertIs(trailer.app, trailer.server.app)
@@ -94,9 +101,10 @@ class PackageTests(unittest.TestCase):
         )
 
         with patch(
-            "trailer.services.predictor.gpx_to_features", return_value=(vector, 180.0)
+            "trailer.services.predictor.gpx_xml_to_features",
+            return_value=(vector, 180.0),
         ):
-            file = UploadFile(filename="route.gpx", file=io.BytesIO(b"<gpx></gpx>"))
+            file = FakeUploadFile("route.gpx", b"<gpx></gpx>")
             multipart_result = asyncio.run(predict(request, file))
             body_result = asyncio.run(predict_body(request, b"<gpx></gpx>"))
 
@@ -111,7 +119,7 @@ class PackageTests(unittest.TestCase):
         predict = next(
             route.endpoint for route in app.routes if route.path == "/predict"
         )
-        bad_file = UploadFile(filename="route.txt", file=io.BytesIO(b"not-gpx"))
+        bad_file = FakeUploadFile("route.txt", b"not-gpx")
 
         with self.assertRaises(HTTPException) as exc:
             asyncio.run(predict(request, bad_file))

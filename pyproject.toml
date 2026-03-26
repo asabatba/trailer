@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.135.2",
-    "gpxpy>=1.6.2",
+    "fastgpx",
     "joblib>=1.5.3",
     "numpy>=2.4.3",
     "python-multipart>=0.0.22",
@@ -33,3 +33,6 @@ packages = ["src/trailer"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/trailer/data/model.pkl" = "trailer/data/model.pkl"
+
+[tool.uv.sources]
+fastgpx = { git = "https://github.com/asabatba/fastgpx" }
