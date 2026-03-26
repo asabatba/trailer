@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import io
 import sys
 import unittest
@@ -20,6 +21,8 @@ import trailer
 import trailer.server
 from trailer.features import FEATURE_NAMES
 from trailer.server import _default_model_path, create_app
+
+api_app_module = importlib.import_module("trailer.api.app")
 
 
 def make_request(app):
@@ -53,6 +56,7 @@ class FakeModel:
 class PackageTests(unittest.TestCase):
     def test_imports_and_bundled_model_resource_exist(self):
         self.assertIs(trailer.app, trailer.server.app)
+        self.assertIs(trailer.app, api_app_module.app)
         self.assertTrue(files("trailer.data").joinpath("model.pkl").is_file())
         self.assertTrue(_default_model_path().exists())
 
@@ -82,12 +86,16 @@ class PackageTests(unittest.TestCase):
         vector[idx["total_loss_m"]] = 839
         vector[idx["total_tobler_min"]] = 171.6
 
-        predict = next(route.endpoint for route in app.routes if route.path == "/predict")
+        predict = next(
+            route.endpoint for route in app.routes if route.path == "/predict"
+        )
         predict_body = next(
             route.endpoint for route in app.routes if route.path == "/predict-body"
         )
 
-        with patch("trailer.server.gpx_to_features", return_value=(vector, 180.0)):
+        with patch(
+            "trailer.services.predictor.gpx_to_features", return_value=(vector, 180.0)
+        ):
             file = UploadFile(filename="route.gpx", file=io.BytesIO(b"<gpx></gpx>"))
             multipart_result = asyncio.run(predict(request, file))
             body_result = asyncio.run(predict_body(request, b"<gpx></gpx>"))
@@ -100,7 +108,9 @@ class PackageTests(unittest.TestCase):
         app.state.model = FakeModel()
         request = make_request(app)
         request.scope["app"] = app
-        predict = next(route.endpoint for route in app.routes if route.path == "/predict")
+        predict = next(
+            route.endpoint for route in app.routes if route.path == "/predict"
+        )
         bad_file = UploadFile(filename="route.txt", file=io.BytesIO(b"not-gpx"))
 
         with self.assertRaises(HTTPException) as exc:

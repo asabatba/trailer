@@ -1,4 +1,4 @@
-"""Trailer package."""
+"""HTTP API package for trailer."""
 
 from trailer.api.app import app, create_app
 

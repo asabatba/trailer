@@ -23,10 +23,10 @@ trailer-server = "trailer.cli.server:main"
 trailer-train = "trailer.cli.train:main"
 trailer-predict = "trailer.cli.predict:main"
 trailer-generate-demo = "trailer.cli.generate_demo:main"
-trailer-sweep-chunking = "trailer.cli.sweep_chunking:main"
-trailer-sweep-smoothing = "trailer.cli.sweep_smoothing:main"
-trailer-sweep-strategies = "trailer.cli.sweep_strategies:main"
-trailer-sweep-advanced = "trailer.cli.sweep_advanced:main"
+trailer-sweep-chunking = "trailer.experiments.sweep_chunking:main"
+trailer-sweep-smoothing = "trailer.experiments.sweep_smoothing:main"
+trailer-sweep-strategies = "trailer.experiments.sweep_strategies:main"
+trailer-sweep-advanced = "trailer.experiments.sweep_advanced:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trailer"]

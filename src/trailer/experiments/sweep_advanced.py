@@ -27,14 +27,11 @@ Baseline: distance-600m, MAE=13.8 min.
 import sys
 import warnings
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List
 
 import numpy as np
-from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
-from sklearn.model_selection import LeaveOneOut
-from sklearn.preprocessing import StandardScaler
 
+from trailer.experiments.cv import loo_cv_two_stage
 from trailer.features import (
     FEATURE_NAMES,
     Chunk,
@@ -65,57 +62,6 @@ DIST_IDXS = [_IDX[f] for f in DIST_NAMES]
 
 # Steep threshold used in D
 STEEP_THRESH = 0.15  # |mean_grade| > 15 %
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Generic two-stage LOO-CV
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def loo_cv(
-    X: np.ndarray,
-    y: np.ndarray,
-    names: List[str],
-    tobler_col: int = TOBLER_COL,
-    ridge_alpha: float = RIDGE_ALPHA,
-    min_n_residual: int = 12,
-    verbose: bool = False,
-) -> Tuple[float, float]:
-    n_feat = X.shape[1]
-    res_cols = [i for i in range(n_feat) if i != tobler_col]
-
-    loo = LeaveOneOut()
-    y_pred = np.zeros_like(y)
-
-    for train_idx, test_idx in loo.split(X):
-        Xp_tr = X[train_idx][:, [tobler_col]]
-        Xp_te = X[test_idx][:, [tobler_col]]
-        phys = LinearRegression(fit_intercept=False)
-        phys.fit(Xp_tr, y[train_idx])
-        pred = phys.predict(Xp_te)
-
-        if len(train_idx) >= min_n_residual:
-            resid = y[train_idx] - phys.predict(Xp_tr)
-            scaler = StandardScaler()
-            Xr_tr = scaler.fit_transform(X[train_idx][:, res_cols])
-            ridge = Ridge(alpha=ridge_alpha)
-            ridge.fit(Xr_tr, resid)
-            pred += ridge.predict(scaler.transform(X[test_idx][:, res_cols]))
-
-        y_pred[test_idx] = np.maximum(pred, 0.0)
-
-    mae = mean_absolute_error(y, y_pred)
-    mape = mean_absolute_percentage_error(y, y_pred) * 100
-
-    if verbose:
-        errs = y_pred - y
-        print(f"\n  {'Route':44s} {'Act':>7} {'Pred':>7} {'Err':>7}")
-        print(f"  {'-' * 44} {'-' * 7} {'-' * 7} {'-' * 7}")
-        for n, a, p, e in zip(names, y, y_pred, errs):
-            flag = "  <!" if abs(e) > 30 else ""
-            print(f"  {n:44s} {a:7.1f} {p:7.1f} {e:+7.1f}{flag}")
-
-    return mae, mape
 
 
 def row(label, mae, mape, pad=44):
@@ -393,7 +339,9 @@ def main():
     print("=== A: Overlapping windows (600 m window) ===")
     for stride in [150, 200, 300]:
         X, y, names = build_overlapping(gpx_files, stride_m=stride)
-        mae, mape = loo_cv(X, y, names)
+        mae, mape = loo_cv_two_stage(
+            X, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA
+        )
         label = f"A  stride={stride}m"
         results[label] = row(label, mae, mape)
     print()
@@ -402,7 +350,9 @@ def main():
     print("=== B: Coarse dual-scale ===")
     for fine, coarse in [(500, 1000), (600, 1200), (600, 900)]:
         X, y, names = build_dualscale(gpx_files, fine, coarse)
-        mae, mape = loo_cv(X, y, names)
+        mae, mape = loo_cv_two_stage(
+            X, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA
+        )
         label = f"B  {fine}+{coarse}m"
         results[label] = row(label, mae, mape)
     print()
@@ -410,7 +360,9 @@ def main():
     # ── C: Position features ─────────────────────────────────────────────────
     print("=== C: Position-aware features (+6) ===")
     X, y, names = build_with_extra(gpx_files, position_features)
-    mae, mape = loo_cv(X, y, names)
+    mae, mape = loo_cv_two_stage(
+        X, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA
+    )
     label = "C  position"
     results[label] = row(label, mae, mape)
     print()
@@ -418,7 +370,9 @@ def main():
     # ── D: Event features ────────────────────────────────────────────────────
     print("=== D: Event features (+4) ===")
     X, y, names = build_with_extra(gpx_files, event_features)
-    mae, mape = loo_cv(X, y, names)
+    mae, mape = loo_cv_two_stage(
+        X, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA
+    )
     label = "D  events"
     results[label] = row(label, mae, mape)
     print()
@@ -430,7 +384,9 @@ def main():
         return np.concatenate([position_features(feats), event_features(feats)])
 
     X, y, names = build_with_extra(gpx_files, cd_features)
-    mae, mape = loo_cv(X, y, names)
+    mae, mape = loo_cv_two_stage(
+        X, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA
+    )
     label = "C+D  pos+events"
     results[label] = row(label, mae, mape)
     print()
@@ -446,7 +402,9 @@ def main():
     X_a, y, names = build_overlapping(gpx_files, stride_m=best_a_stride)
     X_cd, _, _ = build_with_extra(gpx_files, cd_features)
     X_acd = np.concatenate([X_a, X_cd[:, 19:]], axis=1)  # keep A base, add C+D extras
-    mae, mape = loo_cv(X_acd, y, names)
+    mae, mape = loo_cv_two_stage(
+        X_acd, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA
+    )
     label = f"A(stride={best_a_stride})+C+D"
     results[label] = row(label, mae, mape)
 
@@ -460,7 +418,9 @@ def main():
     X_b, y, names = build_dualscale(gpx_files, fine_b, coarse_b)
     X_cd_extra = X_cd[:, 19:]
     X_bcd = np.concatenate([X_b, X_cd_extra], axis=1)
-    mae, mape = loo_cv(X_bcd, y, names)
+    mae, mape = loo_cv_two_stage(
+        X_bcd, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA
+    )
     label = f"B({fine_b}+{coarse_b})+C+D"
     results[label] = row(label, mae, mape)
     print()
@@ -501,7 +461,18 @@ def main():
         else:
             X, y, names = None, None, None
         if X is not None:
-            loo_cv(X, y, names, verbose=True)
+            loo_cv_two_stage(
+                X,
+                y,
+                names,
+                tobler_col=TOBLER_COL,
+                ridge_alpha=RIDGE_ALPHA,
+                verbose=True,
+                route_width=44,
+                actual_header="Act",
+                pred_header="Pred",
+                error_header="Err",
+            )
 
 
 if __name__ == "__main__":

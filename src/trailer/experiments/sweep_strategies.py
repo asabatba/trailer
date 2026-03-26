@@ -15,14 +15,10 @@ All use two-stage LOO-CV (physics OLS → Ridge residuals), ridge_alpha=0.5.
 
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import numpy as np
-from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
-from sklearn.model_selection import LeaveOneOut
-from sklearn.preprocessing import StandardScaler
 
+from trailer.experiments.cv import loo_cv_two_stage
 from trailer.features import (
     FEATURE_NAMES,
     Chunk,
@@ -40,7 +36,6 @@ BASELINE = ("distance-600m", 13.8)  # from previous sweeps
 # Indices used by the two-stage model
 _IDX = {name: i for i, name in enumerate(FEATURE_NAMES)}
 TOBLER_COL = _IDX["total_tobler_min"]
-RESIDUAL_COLS = [i for i in range(len(FEATURE_NAMES)) if i != TOBLER_COL]
 
 # Distribution features used for the fine-scale layer in multiscale
 DIST_FEATURE_NAMES = [
@@ -52,65 +47,6 @@ DIST_FEATURE_NAMES = [
     "n_chunks",
 ]
 DIST_IDXS = [_IDX[f] for f in DIST_FEATURE_NAMES]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Generic two-stage LOO-CV (works with any feature matrix width)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def loo_cv_generic(
-    X: np.ndarray,
-    y: np.ndarray,
-    names: List[str],
-    tobler_col: int = TOBLER_COL,
-    ridge_alpha: float = RIDGE_ALPHA,
-    min_n_residual: int = 12,
-    label: str = "",
-    verbose: bool = False,
-) -> Tuple[float, float]:
-    n_features = X.shape[1]
-    residual_cols = [i for i in range(n_features) if i != tobler_col]
-
-    loo = LeaveOneOut()
-    y_pred = np.zeros_like(y)
-
-    for train_idx, test_idx in loo.split(X):
-        # Stage 1 – physics calibration
-        X_phys = X[:, [tobler_col]]
-        phys = LinearRegression(fit_intercept=False)
-        phys.fit(X_phys[train_idx], y[train_idx])
-        pred = phys.predict(X_phys[test_idx])
-
-        # Stage 2 – residual correction
-        if len(train_idx) >= min_n_residual:
-            residuals = y[train_idx] - phys.predict(X_phys[train_idx])
-            X_res = X[:, residual_cols]
-            scaler = StandardScaler()
-            X_res_tr = scaler.fit_transform(X_res[train_idx])
-            ridge = Ridge(alpha=ridge_alpha)
-            ridge.fit(X_res_tr, residuals)
-            pred += ridge.predict(scaler.transform(X_res[test_idx]))
-
-        y_pred[test_idx] = np.maximum(pred, 0.0)
-
-    mae = mean_absolute_error(y, y_pred)
-    mape = mean_absolute_percentage_error(y, y_pred) * 100
-
-    if verbose:
-        errors = y_pred - y
-        print(f"\n  {'Route':42s} {'Actual':>8} {'Pred':>8} {'Error':>8}")
-        print(f"  {'-' * 42} {'-' * 8} {'-' * 8} {'-' * 8}")
-        for name, actual, pred, err in zip(names, y, y_pred, errors):
-            flag = "  <!" if abs(err) > 30 else ""
-            print(f"  {name:42s} {actual:8.1f} {pred:8.1f} {err:+8.1f}{flag}")
-
-    return mae, mape
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Dataset builders for each strategy
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 def build_standard(gpx_files, chunk_size_m, strategy):
@@ -186,8 +122,13 @@ def build_multiscale(gpx_files, fine_m, coarse_m):
 
 
 def sweep(label, X, y, names, tobler_col=TOBLER_COL, verbose=False):
-    mae, mape = loo_cv_generic(
-        X, y, names, tobler_col=tobler_col, label=label, verbose=verbose
+    mae, mape = loo_cv_two_stage(
+        X,
+        y,
+        names,
+        tobler_col=tobler_col,
+        ridge_alpha=RIDGE_ALPHA,
+        verbose=verbose,
     )
     print(f"  {label:40s}  MAE={mae:5.1f} min  MAPE={mape:4.1f}%")
     return mae, mape
@@ -275,7 +216,9 @@ def main():
             fine = int(strategy_parts[1].replace("fine=", "").replace("m", ""))
             coarse = int(strategy_parts[2].replace("coarse=", "").replace("m", ""))
             X, y, names = build_multiscale(gpx_files, fine, coarse)
-        loo_cv_generic(X, y, names, verbose=True)
+        loo_cv_two_stage(
+            X, y, names, tobler_col=TOBLER_COL, ridge_alpha=RIDGE_ALPHA, verbose=True
+        )
 
 
 if __name__ == "__main__":
