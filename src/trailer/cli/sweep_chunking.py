@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from model import build_dataset, loo_cv
+from trailer.model import build_dataset, loo_cv
 
 GPX_DIR = Path("hiking_tracks")
 RIDGE_ALPHA = 0.5

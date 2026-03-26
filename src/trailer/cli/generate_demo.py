@@ -13,7 +13,6 @@ Each file has a slightly different character:
 """
 
 import math
-import os
 import random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -201,8 +200,8 @@ def main():
 
     print(f"\n✓ Files written to ./{out_dir}/")
     print(f"\nNext steps:")
-    print(f"  python train.py --gpx-dir {out_dir} --output model.pkl")
-    print(f"  python predict.py model.pkl {out_dir}/montserrat_classic.gpx")
+    print(f"  trailer-train --gpx-dir {out_dir} --output model.pkl")
+    print(f"  trailer-predict model.pkl {out_dir}/montserrat_classic.gpx")
 
 
 if __name__ == "__main__":

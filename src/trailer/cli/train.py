@@ -5,13 +5,13 @@ train.py — Train the hiking time predictor on a folder of GPX files.
 Usage
 ─────
   # GPX files have timestamps (most GPS recordings):
-  python train.py --gpx-dir ./my_hikes --output model.pkl
+  trailer-train --gpx-dir ./my_hikes --output model.pkl
 
   # Provide manual labels (CSV: filename_stem,minutes):
-  python train.py --gpx-dir ./my_hikes --labels labels.csv --output model.pkl
+  trailer-train --gpx-dir ./my_hikes --labels labels.csv --output model.pkl
 
   # Tune chunk size and Ridge alpha:
-  python train.py --gpx-dir ./my_hikes --chunk-size 150 --alpha 5.0
+  trailer-train --gpx-dir ./my_hikes --chunk-size 150 --alpha 5.0
 
 Labels CSV format
 ─────────────────
@@ -27,10 +27,8 @@ import csv
 import sys
 from pathlib import Path
 
-import numpy as np
-
-from gpx_features import describe_gpx
-from model import HikingTimeModel, build_dataset, loo_cv
+from trailer.features import describe_gpx
+from trailer.model import HikingTimeModel, build_dataset, loo_cv
 
 
 def load_labels(csv_path: Path) -> dict:
@@ -99,7 +97,9 @@ def main():
     # ── Describe mode ────────────────────────────────────────────────────────
     if args.describe:
         for p in gpx_files:
-            info = describe_gpx(p, args.chunk_size, args.chunk_strategy)
+            info = describe_gpx(
+                p, args.chunk_size, args.chunk_strategy, args.ele_smooth
+            )
             print(f"\n{'─' * 60}")
             print(f"  {p.name}")
             for k, v in info.items():

@@ -8,7 +8,7 @@ Tests window sizes 1 (none) through 31 against 600m distance chunks, alpha=0.5.
 import sys
 from pathlib import Path
 
-from model import build_dataset, loo_cv
+from trailer.model import build_dataset, loo_cv
 
 GPX_DIR = Path("hiking_tracks")
 CHUNK_SIZE = 600.0

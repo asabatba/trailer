@@ -1,7 +1,11 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
 [project]
-name = "trailer-v2"
+name = "trailer"
 version = "0.1.0"
-description = "Add your description here"
+description = "Server-first hiking time prediction package with FastAPI and GPX tooling."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -13,3 +17,19 @@ dependencies = [
     "scikit-learn>=1.8.0",
     "uvicorn[standard]>=0.42.0",
 ]
+
+[project.scripts]
+trailer-server = "trailer.cli.server:main"
+trailer-train = "trailer.cli.train:main"
+trailer-predict = "trailer.cli.predict:main"
+trailer-generate-demo = "trailer.cli.generate_demo:main"
+trailer-sweep-chunking = "trailer.cli.sweep_chunking:main"
+trailer-sweep-smoothing = "trailer.cli.sweep_smoothing:main"
+trailer-sweep-strategies = "trailer.cli.sweep_strategies:main"
+trailer-sweep-advanced = "trailer.cli.sweep_advanced:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trailer"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/trailer/data/model.pkl" = "trailer/data/model.pkl"

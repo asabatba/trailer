@@ -23,7 +23,7 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 from sklearn.model_selection import LeaveOneOut
 from sklearn.preprocessing import StandardScaler
 
-from gpx_features import (
+from trailer.features import (
     FEATURE_NAMES,
     Chunk,
     aggregate_features,
@@ -31,7 +31,7 @@ from gpx_features import (
     gpx_to_features,
     parse_gpx,
 )
-from model import build_dataset
+from trailer.model import build_dataset
 
 GPX_DIR = Path("hiking_tracks")
 RIDGE_ALPHA = 0.5

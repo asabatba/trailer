@@ -35,7 +35,7 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 from sklearn.model_selection import LeaveOneOut
 from sklearn.preprocessing import StandardScaler
 
-from gpx_features import (
+from trailer.features import (
     FEATURE_NAMES,
     Chunk,
     TrackPoint,

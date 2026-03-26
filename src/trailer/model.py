@@ -39,7 +39,7 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 from sklearn.model_selection import LeaveOneOut
 from sklearn.preprocessing import StandardScaler
 
-from gpx_features import FEATURE_NAMES, gpx_to_features
+from trailer.features import FEATURE_NAMES, gpx_to_features
 
 # Indices into the feature vector (keep in sync with FEATURE_NAMES)
 _IDX = {name: i for i, name in enumerate(FEATURE_NAMES)}

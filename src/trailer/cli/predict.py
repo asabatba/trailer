@@ -4,17 +4,17 @@ predict.py — Predict hiking time for one or more GPX files.
 
 Usage
 ─────
-  python predict.py model.pkl hike.gpx
-  python predict.py model.pkl hike1.gpx hike2.gpx
-  python predict.py model.pkl --dir ./routes/
+  trailer-predict model.pkl hike.gpx
+  trailer-predict model.pkl hike1.gpx hike2.gpx
+  trailer-predict model.pkl --dir ./routes/
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-from gpx_features import FEATURE_NAMES, describe_gpx, gpx_to_features
-from model import HikingTimeModel
+from trailer.features import FEATURE_NAMES, describe_gpx, gpx_to_features
+from trailer.model import HikingTimeModel
 
 _IDX = {name: i for i, name in enumerate(FEATURE_NAMES)}
 

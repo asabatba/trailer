@@ -97,7 +97,7 @@ Every sample becomes the test set exactly once — no data is wasted.
 ## Setup
 
 ```bash
-pip install gpxpy numpy scikit-learn joblib
+uv sync
 ```
 
 ## Usage
@@ -105,10 +105,10 @@ pip install gpxpy numpy scikit-learn joblib
 ### Training (GPX files with timestamps)
 ```bash
 # GPS-recorded tracks (timestamps extracted automatically)
-python train.py --gpx-dir ./my_hikes --output model.pkl
+trailer-train --gpx-dir ./my_hikes --output model.pkl
 
 # Manual labels (filename_stem, actual_minutes)
-python train.py --gpx-dir ./my_hikes --labels labels.csv --output model.pkl
+trailer-train --gpx-dir ./my_hikes --labels labels.csv --output model.pkl
 ```
 
 ### Labels CSV format
@@ -120,19 +120,26 @@ pyrenees_tour,485
 
 ### Prediction
 ```bash
-python predict.py model.pkl new_route.gpx
-python predict.py model.pkl --dir ./routes/ --verbose
+trailer-predict model.pkl new_route.gpx
+trailer-predict model.pkl --dir ./routes/ --verbose
 ```
 
 ### Inspect a GPX
 ```bash
-python train.py --gpx-dir ./my_hikes --describe
+trailer-train --gpx-dir ./my_hikes --describe
 ```
 
 ### Generate test data
 ```bash
-python generate_demo_gpx.py
-python train.py --gpx-dir demo_gpx --output model.pkl
+trailer-generate-demo
+trailer-train --gpx-dir demo_gpx --output model.pkl
+```
+
+### API server
+```bash
+uv run uvicorn trailer.server:app --reload
+# or
+trailer-server --reload
 ```
 
 ---
