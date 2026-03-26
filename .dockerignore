@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+.ruff_cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+tests/
+hiking_tracks/
+railpack.json
