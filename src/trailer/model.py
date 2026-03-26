@@ -9,11 +9,9 @@ With N≈20, unconstrained ML models can overfit and learn nonsensical
 relationships.  This model uses a small monotone design matrix made of
 nonnegative, physics-aligned route features:
 
-    ŷ = α·tobler_min
-      + β·steep_descent_penalty
-      + γ·roughness_penalty
-      + δ·steep_fraction_penalty
-      + ε·very_steep_fraction_penalty
+    ŷ = α·best_case_distance_min
+      + β·slope_penalty_min
+      + γ·vertical_change_m
 
 All coefficients are constrained nonnegative and there is no intercept, so
 increasing any learned effort channel cannot reduce predicted time.
@@ -45,11 +43,9 @@ _IDX = {name: i for i, name in enumerate(FEATURE_NAMES)}
 # Nonnegative, physically meaningful channels only.  The model ignores the rest
 # of the aggregated feature vector to keep monotonicity obvious by construction.
 CONSTRAINED_FEATURES = [
-    "total_tobler_min",
-    "total_steep_loss_m",
-    "grade_std_mean",
-    "frac_steep",
-    "frac_very_steep",
+    "best_case_distance_min",
+    "slope_penalty_min",
+    "vertical_change_m",
 ]
 CONSTRAINED_IDX = [_IDX[f] for f in CONSTRAINED_FEATURES]
 

@@ -18,7 +18,7 @@ Chunks  [~200 m segments]
    └─ tobler_min  ← Tobler's hiking function
    │
    ▼ aggregate_features()
-Feature vector  (19 values)
+Feature vector  (22 values)
    │
    ▼ HikingTimeModel.predict()
 Duration (minutes)
@@ -43,28 +43,24 @@ speed (km/h) = 6 · exp(−3.5 · |gradient + 0.05|)
 ```
 
 The `+0.05` bias shifts the optimum to ~2.86° downhill, matching empirical observations.  
-The model learns only a small set of nonnegative penalty terms:
+The model learns only a small set of nonnegative route-effort terms:
 
 ```
-ŷ = α·total_tobler_min
-  + β·total_steep_loss_m
-  + γ·grade_std_mean
-  + δ·frac_steep
-  + ε·frac_very_steep
+ŷ = α·best_case_distance_min
+  + β·slope_penalty_min
+  + γ·vertical_change_m
 ```
 
-- `α` calibrates your personal pace vs Tobler
-- `β` penalises steep descending terrain
-- `γ` penalises rough / variable slope
-- `δ`, `ε` penalise sustained steepness
+- `best_case_distance_min` is the 6 km/h Tobler maximum-speed floor (`10 min/km`)
+- `slope_penalty_min` is the extra Tobler time caused by the route's slope profile
+- `vertical_change_m` is total vertical work (`gain + loss`)
 
 All coefficients are constrained to be nonnegative and there is no intercept.
 That means increasing any learned effort term cannot reduce predicted time.
 
-The full aggregated feature vector is still computed, but the trained model only
-uses the nonnegative, physics-aligned subset above.  This keeps the model
-simple enough for small datasets while ruling out the obvious sign errors from
-an unconstrained residual model.
+This decomposition works better than raw `total_tobler_min` alone because it
+lets the model separate horizontal baseline movement from slope-driven delay,
+while keeping the entire model monotone and physics-based.
 
 ### LOO-CV, not k-fold
 
@@ -90,8 +86,7 @@ Every sample becomes the test set exactly once — no data is wasted.
 
 All aggregated features are extracted for inspection and experimentation.
 The default trained model uses this constrained subset:
-`total_tobler_min`, `total_steep_loss_m`, `grade_std_mean`, `frac_steep`,
-`frac_very_steep`.
+`best_case_distance_min`, `slope_penalty_min`, `vertical_change_m`.
 
 | Feature                                     | Why it matters            |
 |---------------------------------------------|---------------------------|
@@ -99,6 +94,9 @@ The default trained model uses this constrained subset:
 | `total_gain_m`                              | Primary effort driver     |
 | `total_loss_m`                              | Knee/pace cost            |
 | `total_tobler_min`                          | **Best single predictor** |
+| `best_case_distance_min`                    | Distance-only time floor  |
+| `slope_penalty_min`                         | Slope cost above distance |
+| `vertical_change_m`                         | Total vertical work       |
 | `mean_grade`, `max_grade`, `grade_std_mean` | Terrain shape             |
 | `p75_tobler_min`, `p90_tobler_min`          | Bottleneck segments       |
 | `frac_steep`, `frac_very_steep`             | Technical difficulty      |

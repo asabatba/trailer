@@ -534,10 +534,16 @@ FEATURE_NAMES = [
     "total_gain_m",
     "total_loss_m",
     "total_tobler_min",  # primary effort baseline for the constrained model
+    # Best-case movement at Tobler's maximum 6 km/h (10 min/km).
+    "best_case_distance_min",
+    # Extra time above the best-case distance floor due to slope profile.
+    "slope_penalty_min",
     # Split Tobler remains useful for diagnostics and experiments, even though
     # the default model only learns on the monotone subset below.
     "total_tobler_ascent_min",
     "total_tobler_descent_min",
+    # Total vertical work, regardless of sign.
+    "vertical_change_m",
     # ── Slope statistics (terrain difficulty shape)
     "mean_grade",
     "mean_abs_grade",
@@ -574,8 +580,11 @@ def aggregate_features(chunks: List[Chunk]) -> np.ndarray:
     total_gain_m = sum(f["gain_m"] for f in feats)
     total_loss_m = sum(f["loss_m"] for f in feats)
     total_tobler = sum(f["tobler_min"] for f in feats)
+    best_case_distance_min = total_dist_m / 100.0
+    slope_penalty_min = max(total_tobler - best_case_distance_min, 0.0)
     total_tobler_ascent = sum(f["tobler_ascent_min"] for f in feats)
     total_tobler_descent = sum(f["tobler_descent_min"] for f in feats)
+    vertical_change_m = total_gain_m + total_loss_m
     total_dist_km = total_dist_m / 1000.0
 
     grades = np.array([f["mean_grade"] for f in feats])
@@ -596,8 +605,11 @@ def aggregate_features(chunks: List[Chunk]) -> np.ndarray:
         total_gain_m,
         total_loss_m,
         total_tobler,
+        best_case_distance_min,
+        slope_penalty_min,
         total_tobler_ascent,
         total_tobler_descent,
+        vertical_change_m,
         float(np.mean(grades)),
         float(np.mean(np.abs(grades))),
         float(np.max(max_grades)),
