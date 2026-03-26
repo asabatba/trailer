@@ -1,21 +1,12 @@
 {
     "$schema": "https://schema.railpack.com",
-    "buildAptPackages": [
-        "build-essential",
-        "g++-13",
-        "cmake"
-    ],
     "steps": {
-        "setup": {
-            "variables": {
-                "CXX": "g++-13",
-                "CC": "gcc-13"
-            }
+        "install": {
+            "commands": [
+                "export CC=gcc-13 CXX=g++-13",
+                "python -m pip install --upgrade pip setuptools wheel",
+                "pip install -r requirements.txt"
+            ]
         }
-    },
-    "deploy": {
-        "aptPackages": [
-            "libstdc++6"
-        ]
     }
 }
