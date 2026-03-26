@@ -90,9 +90,10 @@ class Chunk:
         grade_std = float(np.std(grads))
 
         # ── Tobler time (minutes) per segment ───────────────────────────────
-        # Split into ascent / descent so Stage 1 can calibrate them independently.
-        # Tobler significantly overestimates speed on steep descent (>25% grade),
-        # so a single multiplier α cannot fit both uphill and downhill routes well.
+        # Track ascent/descent Tobler totals separately for diagnostics and
+        # experiments.  Tobler significantly overestimates speed on steep
+        # descent (>25% grade), so the split also helps define descent
+        # penalties such as total_steep_loss_m.
         tobler_min = 0.0
         tobler_ascent_min = 0.0
         tobler_descent_min = 0.0
@@ -532,9 +533,9 @@ FEATURE_NAMES = [
     "total_dist_km",
     "total_gain_m",
     "total_loss_m",
-    "total_tobler_min",  # primary Tobler predictor (Stage 1)
-    # Split Tobler exposes ascent/descent pace asymmetry for Stage 2 residuals.
-    # Kept out of Stage 1 to avoid multicollinearity with total_loss_m.
+    "total_tobler_min",  # primary effort baseline for the constrained model
+    # Split Tobler remains useful for diagnostics and experiments, even though
+    # the default model only learns on the monotone subset below.
     "total_tobler_ascent_min",
     "total_tobler_descent_min",
     # ── Slope statistics (terrain difficulty shape)
@@ -548,8 +549,8 @@ FEATURE_NAMES = [
     "frac_steep",  # fraction of chunks with |grade| > 0.25
     "frac_very_steep",  # fraction of chunks with |grade| > 0.40
     # Explicit steep-descent penalty: Tobler overestimates speed on grade < -0.25
-    # (knees, scrambling, unstable terrain). Included in Stage 1 physics so it
-    # is not over-shrunk by Ridge regularisation.
+    # (knees, scrambling, unstable terrain). Used directly by the constrained
+    # model as a nonnegative penalty term.
     "total_steep_loss_m",
     # ── Derived
     "gain_per_km",

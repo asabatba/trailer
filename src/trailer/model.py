@@ -5,20 +5,18 @@ Hiking time prediction model designed for small datasets (~20 GPX files).
 
 Architecture
 ────────────
-With N=20, classic ML models overfit badly.  We use a two-stage approach:
+With N≈20, unconstrained ML models can overfit and learn nonsensical
+relationships.  This model uses a small monotone design matrix made of
+nonnegative, physics-aligned route features:
 
-  Stage 1 – Physics prior (Tobler calibration)
-    A simple 4-parameter OLS fit:
-        ŷ = α·tobler_min + β·total_gain_m + γ·total_loss_m + δ
-    This is essentially "how much does your actual pace deviate from
-    Tobler's theoretical formula?"  Works well even with 5 samples.
+    ŷ = α·tobler_min
+      + β·steep_descent_penalty
+      + γ·roughness_penalty
+      + δ·steep_fraction_penalty
+      + ε·very_steep_fraction_penalty
 
-  Stage 2 – Residual correction (optional Ridge)
-    If N ≥ 12, a Ridge regressor is stacked on the Stage-1 residuals
-    using the remaining features.  This captures terrain roughness and
-    gradient distribution effects that Tobler misses.
-
-The final prediction is stage1 + stage2_residual_correction.
+All coefficients are constrained nonnegative and there is no intercept, so
+increasing any learned effort channel cannot reduce predicted time.
 
 Evaluation
 ──────────
@@ -34,7 +32,7 @@ from typing import Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
-from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 from sklearn.model_selection import LeaveOneOut
 from sklearn.preprocessing import StandardScaler
@@ -44,14 +42,33 @@ from trailer.features import FEATURE_NAMES, gpx_to_features
 # Indices into the feature vector (keep in sync with FEATURE_NAMES)
 _IDX = {name: i for i, name in enumerate(FEATURE_NAMES)}
 
-# Stage 1 uses only total_tobler_min: it already encodes gain + loss + distance
-# via Tobler's formula, so adding them explicitly causes multicollinearity.
-# total_steep_loss_m belongs in Stage 2: with moving-time labels its sign is
-# data-driven (small N can flip it), so Ridge regularisation is safer.
-PHYSICS_FEATURES = ["total_tobler_min"]
-PHYSICS_IDX = [_IDX[f] for f in PHYSICS_FEATURES]
-RESIDUAL_FEATURES = [f for f in FEATURE_NAMES if f not in PHYSICS_FEATURES]
-RESIDUAL_IDX = [_IDX[f] for f in RESIDUAL_FEATURES]
+# Nonnegative, physically meaningful channels only.  The model ignores the rest
+# of the aggregated feature vector to keep monotonicity obvious by construction.
+CONSTRAINED_FEATURES = [
+    "total_tobler_min",
+    "total_steep_loss_m",
+    "grade_std_mean",
+    "frac_steep",
+    "frac_very_steep",
+]
+CONSTRAINED_IDX = [_IDX[f] for f in CONSTRAINED_FEATURES]
+
+
+def build_monotone_design_matrix(X: np.ndarray) -> np.ndarray:
+    """
+    Select the constrained feature subset used by the model.
+
+    The chosen channels are naturally nonnegative for valid route features.
+    Clamp at zero as a final safeguard against malformed inputs or tiny
+    numerical negatives.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    if X.ndim == 1:
+        X = X.reshape(1, -1)
+    assert X.shape[1] == len(FEATURE_NAMES), (
+        f"Expected {len(FEATURE_NAMES)} features, got {X.shape[1]}"
+    )
+    return np.maximum(X[:, CONSTRAINED_IDX], 0.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,11 +81,11 @@ class HikingTimeModel:
     Parameters
     ----------
     ridge_alpha : float
-        Regularisation strength for the residual Ridge corrector.
-        Higher → more conservative corrections.  Default 10.0.
+        Regularisation strength for the constrained Ridge regressor.
+        Higher → more conservative penalties.  Default 0.5.
     min_samples_for_residual : int
-        Minimum N before the residual corrector is added.  Below this
-        only the physics-calibration stage is used.
+        Retained for compatibility with earlier call sites; unused by the
+        constrained model.
     chunk_size_m : float
         Chunk size used during feature extraction.
     """
@@ -87,11 +104,10 @@ class HikingTimeModel:
         self.chunk_strategy = chunk_strategy
         self.ele_smooth_window = ele_smooth_window
 
-        self._physics_model: Optional[LinearRegression] = None
-        self._residual_model: Optional[Ridge] = None
+        self._model: Optional[Ridge] = None
         self._scaler: Optional[StandardScaler] = None
-        self._use_residual = False
         self.feature_names = FEATURE_NAMES
+        self.design_feature_names = CONSTRAINED_FEATURES
 
     # ── Training ─────────────────────────────────────────────────────────────
 
@@ -100,37 +116,28 @@ class HikingTimeModel:
         X : (N, len(FEATURE_NAMES)) feature matrix
         y : (N,) actual hiking times in minutes
         """
-        N = len(y)
         assert X.shape[1] == len(FEATURE_NAMES), (
             f"Expected {len(FEATURE_NAMES)} features, got {X.shape[1]}"
         )
 
-        # Stage 1 – physics calibration
-        # fit_intercept=False: moving time is proportional to effort.
-        # A fixed intercept would add the same overhead regardless of route
-        # length, which is unphysical. α encodes pace relative to Tobler.
-        X_phys = X[:, PHYSICS_IDX]
-        self._physics_model = LinearRegression(fit_intercept=False)
-        self._physics_model.fit(X_phys, y)
-
-        # Stage 2 – residual correction
-        self._use_residual = N >= self.min_samples_for_residual
-        if self._use_residual:
-            residuals = y - self._physics_model.predict(X_phys)
-            X_resid = X[:, RESIDUAL_IDX]
-            self._scaler = StandardScaler()
-            X_resid_scaled = self._scaler.fit_transform(X_resid)
-            self._residual_model = Ridge(alpha=self.ridge_alpha)
-            self._residual_model.fit(X_resid_scaled, residuals)
+        X_design = build_monotone_design_matrix(X)
+        # Keep zero as the physical origin; centering would destroy the direct
+        # monotonic interpretation of positive coefficients.
+        self._scaler = StandardScaler(with_mean=False)
+        X_scaled = self._scaler.fit_transform(X_design)
+        self._model = Ridge(
+            alpha=self.ridge_alpha,
+            fit_intercept=False,
+            positive=True,
+        )
+        self._model.fit(X_scaled, y)
 
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        assert self._physics_model is not None, "Call fit() first"
-        pred = self._physics_model.predict(X[:, PHYSICS_IDX])
-        if self._use_residual:
-            X_resid_scaled = self._scaler.transform(X[:, RESIDUAL_IDX])
-            pred += self._residual_model.predict(X_resid_scaled)
+        assert self._model is not None and self._scaler is not None, "Call fit() first"
+        X_scaled = self._scaler.transform(build_monotone_design_matrix(X))
+        pred = self._model.predict(X_scaled)
         return np.maximum(pred, 0.0)  # times can't be negative
 
     def predict_one(self, x: np.ndarray) -> float:
@@ -148,21 +155,28 @@ class HikingTimeModel:
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
 
+    def coefficients(self) -> Dict[str, float]:
+        """
+        Returns fitted coefficients on the original feature scale.
+
+        StandardScaler(with_mean=False) divides inputs by scale_, so the raw
+        coefficient for feature i is coef_i / scale_i.
+        """
+        if self._model is None or self._scaler is None:
+            return {}
+
+        scale = np.where(self._scaler.scale_ == 0, 1.0, self._scaler.scale_)
+        raw_coef = self._model.coef_ / scale
+        return {
+            name: float(coef)
+            for name, coef in zip(self.design_feature_names, raw_coef.tolist())
+        }
+
     def feature_importance(self) -> Dict[str, float]:
         """
-        Returns approximate importance scores.
-        Physics stage coefficients are on original scale (interpretable).
-        Residual stage uses scaled coefficients.
+        Returns approximate importance scores for constrained coefficients.
         """
-        importance: Dict[str, float] = {}
-
-        if self._physics_model is not None:
-            for name, coef in zip(PHYSICS_FEATURES, self._physics_model.coef_):
-                importance[name] = abs(coef)
-
-        if self._use_residual and self._residual_model is not None:
-            for name, coef in zip(RESIDUAL_FEATURES, self._residual_model.coef_):
-                importance[name] = abs(coef)
+        importance = {name: abs(coef) for name, coef in self.coefficients().items()}
 
         # Normalise to [0, 1]
         if importance:

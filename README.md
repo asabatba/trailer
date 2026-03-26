@@ -18,7 +18,7 @@ Chunks  [~200 m segments]
    └─ tobler_min  ← Tobler's hiking function
    │
    ▼ aggregate_features()
-Feature vector  (16 values)
+Feature vector  (19 values)
    │
    ▼ HikingTimeModel.predict()
 Duration (minutes)
@@ -33,9 +33,9 @@ Duration (minutes)
 With N=20, standard ML models overfit immediately.  
 A plain Ridge regressor has 16+ weights to fit — more parameters than data points.
 
-### Solution: calibrated physics + residual correction
+### Solution: constrained physics model
 
-**Stage 1 — Physics calibration (Tobler)**  
+**Physics-anchored monotone regression**  
 Tobler's hiking function gives a theoretical speed for any slope:
 
 ```
@@ -43,21 +43,28 @@ speed (km/h) = 6 · exp(−3.5 · |gradient + 0.05|)
 ```
 
 The `+0.05` bias shifts the optimum to ~2.86° downhill, matching empirical observations.  
-We fit only **4 parameters** on top of Tobler:
+The model learns only a small set of nonnegative penalty terms:
 
 ```
-ŷ = α·tobler_min + β·gain_m + γ·loss_m + δ
+ŷ = α·total_tobler_min
+  + β·total_steep_loss_m
+  + γ·grade_std_mean
+  + δ·frac_steep
+  + ε·frac_very_steep
 ```
 
-- `α` calibrates your personal pace vs theory (typically 0.6–1.2)
-- `β` extra cost of climbing beyond Tobler (path difficulty, stops)
-- `γ` extra cost of descending (knee stress, technical terrain)
-- `δ` fixed overhead (start/end, short breaks)
+- `α` calibrates your personal pace vs Tobler
+- `β` penalises steep descending terrain
+- `γ` penalises rough / variable slope
+- `δ`, `ε` penalise sustained steepness
 
-This works well even with **5 samples**.
+All coefficients are constrained to be nonnegative and there is no intercept.
+That means increasing any learned effort term cannot reduce predicted time.
 
-**Stage 2 — Residual correction (Ridge, N ≥ 12)**  
-A Ridge regressor learns the residual from Stage 1 using terrain shape features: roughness, fraction of steep terrain, grade distribution.  Strongly regularised (α=10) to prevent overfitting.
+The full aggregated feature vector is still computed, but the trained model only
+uses the nonnegative, physics-aligned subset above.  This keeps the model
+simple enough for small datasets while ruling out the obvious sign errors from
+an unconstrained residual model.
 
 ### LOO-CV, not k-fold
 
@@ -80,6 +87,11 @@ Every sample becomes the test set exactly once — no data is wasted.
 | `difficulty` | `gain·1.0 + loss·0.5 + dist·0.001`  |
 
 ## Aggregated features (model input)
+
+All aggregated features are extracted for inspection and experimentation.
+The default trained model uses this constrained subset:
+`total_tobler_min`, `total_steep_loss_m`, `grade_std_mean`, `frac_steep`,
+`frac_very_steep`.
 
 | Feature                                     | Why it matters            |
 |---------------------------------------------|---------------------------|
@@ -156,8 +168,8 @@ trailer-server --reload
 
 | Parameter      | Default | Effect                                                  |
 |----------------|---------|---------------------------------------------------------|
-| `--chunk-size` | 200 m   | Smaller → more granular features, slower. Try 100–500 m |
-| `--alpha`      | 10.0    | Higher → more conservative residual correction          |
+| `--chunk-size` | 600 m   | Smaller → more granular features, slower. Try 100–500 m |
+| `--alpha`      | 0.5     | Higher → more conservative constrained penalties        |
 
 **Chunk size guidance:**
 

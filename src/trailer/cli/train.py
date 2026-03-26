@@ -10,7 +10,7 @@ Usage
   # Provide manual labels (CSV: filename_stem,minutes):
   trailer-train --gpx-dir ./my_hikes --labels labels.csv --output model.pkl
 
-  # Tune chunk size and Ridge alpha:
+  # Tune chunk size and constrained Ridge alpha:
   trailer-train --gpx-dir ./my_hikes --chunk-size 150 --alpha 5.0
 
 Labels CSV format
@@ -75,7 +75,7 @@ def main():
         "--alpha",
         type=float,
         default=0.5,
-        help="Ridge regularisation alpha (default 0.5)",
+        help="Constrained Ridge regularisation alpha (default 0.5)",
     )
     ap.add_argument("--no-cv", action="store_true", help="Skip LOO cross-validation")
     ap.add_argument(
@@ -165,19 +165,21 @@ def main():
     )
     model.fit(X, y)
 
-    # ── Feature importance ───────────────────────────────────────────────────
-    print("\nFeature importance (normalised):")
+    # ── Constrained coefficients ─────────────────────────────────────────────
+    print("\nConstrained coefficients (minutes per raw feature unit):")
+    for feat, coef in model.coefficients().items():
+        print(f"  {feat:30s} {coef:9.5f}")
+
+    print("\nConstrained feature importance (normalised):")
     for feat, score in list(model.feature_importance().items())[:8]:
         bar = "#" * int(score * 30)
         print(f"  {feat:30s} {bar:<30s} {score:.3f}")
 
-    # ── Physics stage diagnostics ────────────────────────────────────────────
-    pm = model._physics_model
-    if pm is not None:
-        print(f"\nPhysics calibration (Tobler stage):")
-        print(
-            f"  alpha*tobler_min : {pm.coef_[0]:.4f}  (1.0 = perfect Tobler, no intercept)"
-        )
+    # ── Sanity guarantees ────────────────────────────────────────────────────
+    print("\nSanity guarantees:")
+    print("  Predictions are non-negative.")
+    print("  Increasing any constrained feature cannot decrease prediction.")
+    print(f"  Constrained features: {', '.join(model.design_feature_names)}")
 
     # ── Save ─────────────────────────────────────────────────────────────────
     output = Path(args.output)
