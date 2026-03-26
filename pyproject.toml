@@ -5,8 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fastapi>=0.135.2",
     "gpxpy>=1.6.2",
     "joblib>=1.5.3",
     "numpy>=2.4.3",
+    "python-multipart>=0.0.22",
     "scikit-learn>=1.8.0",
+    "uvicorn[standard]>=0.42.0",
 ]
