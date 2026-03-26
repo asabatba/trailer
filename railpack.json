@@ -3,9 +3,7 @@
     "steps": {
         "install": {
             "commands": [
-                "export CC=gcc-13 CXX=g++-13",
-                "python -m pip install --upgrade pip setuptools wheel",
-                "pip install -r requirements.txt"
+                "export CC=gcc-13 CXX=g++-13"
             ]
         }
     }
